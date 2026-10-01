@@ -1,0 +1,273 @@
+#!/usr/bin/env bash
+set -u
+
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+CONFIG_DIR="$CONFIG_HOME/fakediscord"
+NICK_FILE="$CONFIG_DIR/nick"
+SETTINGS_FILE="$CONFIG_DIR/launcher-settings.conf"
+DEFAULT_TINCAN="$HOME/.local/lib/fakediscord/tincan"
+
+mkdir -p "$CONFIG_DIR"
+
+LANGUAGE="ru"
+NOTIFICATIONS="1"
+PTT_ENABLED="0"
+PTT_KEY="F4"
+MAX_FILE_GIB="8"
+SERVER_NAME="Private"
+CHANNELS="general,gaming,music"
+
+find_tincan() {
+    if [[ -n "${FAKEDISCORD_TINCAN:-}" && -x "$FAKEDISCORD_TINCAN" ]]; then
+        printf '%s\n' "$FAKEDISCORD_TINCAN"; return 0
+    fi
+    if [[ -x "$DEFAULT_TINCAN" ]]; then
+        printf '%s\n' "$DEFAULT_TINCAN"; return 0
+    fi
+    command -v tincan 2>/dev/null || return 1
+}
+
+load_settings() {
+    [[ -f "$SETTINGS_FILE" ]] || return 0
+    while IFS='=' read -r key value; do
+        case "$key" in
+            language) [[ "$value" == "en" || "$value" == "ru" ]] && LANGUAGE="$value" ;;
+            notifications) [[ "$value" == "0" || "$value" == "1" ]] && NOTIFICATIONS="$value" ;;
+            ptt_enabled) [[ "$value" == "0" || "$value" == "1" ]] && PTT_ENABLED="$value" ;;
+            ptt_key)
+                value="${value^^}"
+                case "$value" in
+                    F1|F2|F3|F4|F5|F6|F7|F8|F9|F10|F11|F12|SPACE|CAPSLOCK|[A-Z0-9]) PTT_KEY="$value" ;;
+                esac
+                ;;
+            max_file_gib)
+                if [[ "$value" =~ ^[0-9]+$ ]] && (( value >= 1 && value <= 16 )); then MAX_FILE_GIB="$value"; fi
+                ;;
+            server_name) [[ -n "$value" ]] && SERVER_NAME="$value" ;;
+            channels) [[ -n "$value" ]] && CHANNELS="$value" ;;
+        esac
+    done < "$SETTINGS_FILE"
+}
+
+save_settings() {
+    cat > "$SETTINGS_FILE" <<EOF
+language=$LANGUAGE
+notifications=$NOTIFICATIONS
+ptt_enabled=$PTT_ENABLED
+ptt_key=$PTT_KEY
+max_file_gib=$MAX_FILE_GIB
+server_name=$SERVER_NAME
+channels=$CHANNELS
+EOF
+}
+
+tr_text() {
+    if [[ "$LANGUAGE" == "en" ]]; then printf '%s' "$2"; else printf '%s' "$1"; fi
+}
+
+pause_menu() {
+    echo
+    if [[ "$LANGUAGE" == "en" ]]; then
+        read -r -p "Enter — back to menu..." _
+    else
+        read -r -p "Enter — вернуться в меню..." _
+    fi
+}
+
+load_nick() {
+    if [[ -s "$NICK_FILE" ]]; then NICK="$(head -n 1 "$NICK_FILE")"; else NICK=""; fi
+    while [[ -z "${NICK//[[:space:]]/}" ]]; do
+        if [[ "$LANGUAGE" == "en" ]]; then read -r -p "Nickname: " NICK; else read -r -p "Ник: " NICK; fi
+    done
+    printf '%s\n' "$NICK" > "$NICK_FILE"
+}
+
+change_nick() {
+    local new_nick=""
+    while [[ -z "${new_nick//[[:space:]]/}" ]]; do
+        if [[ "$LANGUAGE" == "en" ]]; then read -r -p "New nickname: " new_nick; else read -r -p "Новый ник: " new_nick; fi
+    done
+    NICK="$new_nick"
+    printf '%s\n' "$NICK" > "$NICK_FILE"
+}
+
+append_session_settings() {
+    SESSION_ARGS+=(--max-file-gib "$MAX_FILE_GIB")
+    [[ "$NOTIFICATIONS" == "0" ]] && SESSION_ARGS+=(--no-notifications)
+    if [[ "$PTT_ENABLED" == "1" ]]; then
+        SESSION_ARGS+=(--ptt --ptt-key "$PTT_KEY")
+    fi
+}
+
+run_tincan() {
+    echo
+    "$TINCAN_BIN" "$@"
+    local rc=$?
+    pause_menu
+    return "$rc"
+}
+
+settings_menu() {
+    while true; do
+        clear
+        echo "=============================================="
+        echo " $(tr_text "Настройки FakeDiscord" "FakeDiscord Settings")"
+        echo "=============================================="
+        if [[ "$LANGUAGE" == "en" ]]; then
+            echo "1) Language: English"
+            echo "2) Notifications: $([[ "$NOTIFICATIONS" == "1" ]] && echo On || echo Off)"
+            echo "3) Push-to-talk: $([[ "$PTT_ENABLED" == "1" ]] && echo On || echo Off)"
+            echo "4) PTT key: $PTT_KEY"
+            echo "5) Max outgoing file: $MAX_FILE_GIB GiB (1-16)"
+            echo "6) Private server name: $SERVER_NAME"
+            echo "7) Server channels: $CHANNELS"
+            echo "0) Back"
+        else
+            echo "1) Язык: Русский"
+            echo "2) Уведомления: $([[ "$NOTIFICATIONS" == "1" ]] && echo Вкл || echo Выкл)"
+            echo "3) Push-to-talk: $([[ "$PTT_ENABLED" == "1" ]] && echo Вкл || echo Выкл)"
+            echo "4) Клавиша PTT: $PTT_KEY"
+            echo "5) Макс. размер отправляемого файла: $MAX_FILE_GIB ГиБ (1-16)"
+            echo "6) Имя приватного сервера: $SERVER_NAME"
+            echo "7) Каналы сервера: $CHANNELS"
+            echo "0) Назад"
+        fi
+        echo
+        read -r -p "> " choice
+        case "$choice" in
+            1)
+                [[ "$LANGUAGE" == "ru" ]] && LANGUAGE="en" || LANGUAGE="ru"
+                save_settings
+                ;;
+            2)
+                [[ "$NOTIFICATIONS" == "1" ]] && NOTIFICATIONS="0" || NOTIFICATIONS="1"
+                save_settings
+                ;;
+            3)
+                [[ "$PTT_ENABLED" == "1" ]] && PTT_ENABLED="0" || PTT_ENABLED="1"
+                save_settings
+                ;;
+            4)
+                local value=""
+                if [[ "$LANGUAGE" == "en" ]]; then
+                    read -r -p "PTT key (F1-F12, A-Z, 0-9, SPACE, CAPSLOCK): " value
+                else
+                    read -r -p "Клавиша PTT (F1-F12, A-Z, 0-9, SPACE, CAPSLOCK): " value
+                fi
+                value="${value^^}"
+                case "$value" in
+                    F1|F2|F3|F4|F5|F6|F7|F8|F9|F10|F11|F12|SPACE|CAPSLOCK|[A-Z0-9])
+                        PTT_KEY="$value"; save_settings
+                        ;;
+                    *)
+                        echo "$(tr_text "Неподдерживаемая клавиша." "Unsupported key.")"; sleep 1
+                        ;;
+                esac
+                ;;
+            5)
+                local value=""
+                if [[ "$LANGUAGE" == "en" ]]; then
+                    read -r -p "Limit in GiB (1-16): " value
+                else
+                    read -r -p "Лимит в ГиБ (1-16): " value
+                fi
+                if [[ "$value" =~ ^[0-9]+$ ]] && (( value >= 1 && value <= 16 )); then
+                    MAX_FILE_GIB="$value"; save_settings
+                else
+                    echo "$(tr_text "Допустимо целое число от 1 до 16." "Enter a whole number from 1 to 16.")"; sleep 1
+                fi
+                ;;
+            6)
+                local value=""
+                if [[ "$LANGUAGE" == "en" ]]; then read -r -p "Private server name: " value; else read -r -p "Имя приватного сервера: " value; fi
+                if [[ -n "${value//[[:space:]]/}" ]]; then SERVER_NAME="$value"; save_settings; fi
+                ;;
+            7)
+                local value=""
+                if [[ "$LANGUAGE" == "en" ]]; then read -r -p "Channels, comma-separated: " value; else read -r -p "Каналы через запятую: " value; fi
+                if [[ -n "${value//[[:space:]]/}" ]]; then CHANNELS="$value"; save_settings; fi
+                ;;
+            0|q|Q) return ;;
+        esac
+    done
+}
+
+TINCAN_BIN="$(find_tincan || true)"
+if [[ -z "$TINCAN_BIN" ]]; then
+    echo "FakeDiscord: tincan binary not found."
+    exit 1
+fi
+
+load_settings
+load_nick
+
+while true; do
+    clear
+    echo "=============================================="
+    echo " FakeDiscord for Arch Linux"
+    echo " $(tr_text "Ник" "Nick"): $NICK"
+    echo " Core: "$("$TINCAN_BIN" --version 2>/dev/null || echo unknown)
+    echo "=============================================="
+    if [[ "$LANGUAGE" == "en" ]]; then
+        echo "1) Connect (saved pairing)"
+        echo "2) Connect with one-time invite"
+        echo "3) Start private server"
+        echo "4) Create one-time invite"
+        echo "5) Authorized devices"
+        echo "6) Revoke device"
+        echo "7) Audio devices"
+        echo "8) Change nickname"
+        echo "9) Settings"
+        echo "10) Reset saved server pairing"
+        echo "0) Exit"
+    else
+        echo "1) Подключиться (сохранённая привязка)"
+        echo "2) Подключиться по одноразовому приглашению"
+        echo "3) Запустить приватный сервер"
+        echo "4) Создать одноразовое приглашение"
+        echo "5) Список разрешённых устройств"
+        echo "6) Отозвать устройство"
+        echo "7) Аудиоустройства"
+        echo "8) Сменить ник"
+        echo "9) Настройки"
+        echo "10) Сбросить локальную привязку к серверу"
+        echo "0) Выход"
+    fi
+    echo
+    read -r -p "> " choice
+
+    case "$choice" in
+        1)
+            SESSION_ARGS=(join --name "$NICK"); append_session_settings
+            run_tincan "${SESSION_ARGS[@]}"
+            ;;
+        2)
+            if [[ "$LANGUAGE" == "en" ]]; then read -r -p "One-time invite: " code; else read -r -p "Одноразовое приглашение: " code; fi
+            if [[ -n "${code//[[:space:]]/}" ]]; then
+                SESSION_ARGS=(join "$code" --name "$NICK"); append_session_settings
+                run_tincan "${SESSION_ARGS[@]}"
+            fi
+            ;;
+        3)
+            SESSION_ARGS=(host --name "$NICK" --server-name "$SERVER_NAME" --channels "$CHANNELS"); append_session_settings
+            run_tincan "${SESSION_ARGS[@]}"
+            ;;
+        4)
+            if [[ "$LANGUAGE" == "en" ]]; then read -r -p "Device/friend label: " label; else read -r -p "Метка устройства/друга: " label; fi
+            [[ -n "${label//[[:space:]]/}" ]] && { clear; "$TINCAN_BIN" invite "$label"; pause_menu; }
+            ;;
+        5) clear; "$TINCAN_BIN" peers; pause_menu ;;
+        6)
+            if [[ "$LANGUAGE" == "en" ]]; then read -r -p "Label or PeerId prefix: " selector; else read -r -p "Метка или начало PeerId: " selector; fi
+            [[ -n "${selector//[[:space:]]/}" ]] && { clear; "$TINCAN_BIN" revoke "$selector"; pause_menu; }
+            ;;
+        7) clear; "$TINCAN_BIN" devices --all; pause_menu ;;
+        8) change_nick ;;
+        9) settings_menu ;;
+        10)
+            if [[ "$LANGUAGE" == "en" ]]; then read -r -p "Reset saved server pairing? [y/N] " answer; else read -r -p "Сбросить сохранённую привязку? [y/N] " answer; fi
+            case "$answer" in y|Y|yes|YES|да|Да) "$TINCAN_BIN" reset-pairing; pause_menu ;; esac
+            ;;
+        0|q|Q) exit 0 ;;
+    esac
+done

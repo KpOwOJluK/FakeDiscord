@@ -1,0 +1,29 @@
+# Build outputs
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.lib
+tincan.exe
+build/
+out/
+arch-linux/dist/
+tincan-src/target/
+
+# Local state / generated releases
+update-server/public/
+*.log
+*.tmp
+*.part
+
+# Backups
+backup-*/
+backup-*.tgz
+.sync-backup-*/
+*.bak
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

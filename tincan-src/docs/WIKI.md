@@ -1,0 +1,73 @@
+# Tincan CLI Wiki & Technical Documentation Portal
+
+Welcome to the official **Tincan CLI** Technical Wiki. Tincan is a serverless, peer-to-peer (P2P) voice and text chat client engineered for the terminal. It delivers multi-channel group communication without a server of its own and without user accounts: no room state, and no copy of a conversation, exists anywhere but on the machines taking part.
+
+Peers still have to find each other and get through their routers, and for that tincan relies on the public iroh infrastructure run by [Number Zero](https://n0.computer) — described in full under [What tincan depends on](../README.md#what-tincan-depends-on).
+
+---
+
+## 📚 Wiki Contents
+
+1. **[Architecture Overview](wiki/1-Architecture-Overview.md)**
+   - Executive Architecture & Philosophy
+   - Dual-Plane Design: Control Plane (Star) vs Voice Plane (Mesh)
+   - Coordinator State Machine & Roster Synchronization
+   - Bandwidth Scaling & Performance Profile
+
+2. **[Audio Engine Deep Dive](wiki/2-Audio-Engine-Deep-Dive.md)**
+   - Audio Pipeline & Signal Flow Diagram
+   - `cpal` Audio Host Driver Bridge
+   - Lock-Free Ring Buffers (`rtrb`)
+   - Opus Codec & Packet Loss Concealment (PLC)
+   - Voice Activity Detection (VAD) & DTX Silence Suppression
+   - Per-Peer Adaptive Jitter Buffer
+   - Multi-Source PCM Audio Mixer & Soft Limiter
+
+3. **[Security & Cryptography Model](wiki/3-Security-and-Cryptography.md)**
+   - Two-Tier Security Architecture
+   - Zero-Knowledge Challenge-Response Authentication (Argon2id + Nonce)
+   - Transport Layer Encryption: QUIC TLS 1.3 + Ed25519 Public Keys (Iroh)
+   - Comprehensive Threat Model & Mitigations
+
+4. **[Wire Protocol Specification](wiki/4-Protocol-Specification.md)**
+   - Binary Wire Formats (`src/proto.rs`)
+   - Control Plane Messages (`ClientMessage`, `ServerMessage`)
+   - Voice Datagram Packet Header & Payload Layout
+   - Postcard Binary Serialization Standard
+
+5. **[Developer & Contribution Guide](wiki/5-Developer-and-Contribution-Guide.md)**
+   - Development Setup & Dependencies (Opus, ALSA/CoreAudio)
+   - Codebase Directory & Module Map
+   - Running the Non-Networked Integration Test Suite (94 Tests)
+   - Debug Logging & Inspection
+
+6. **[Platform & OS Compatibility](wiki/6-Platform-and-OS-Compatibility.md)**
+   - macOS (Apple Silicon & Intel)
+   - Linux (Debian, Ubuntu, Fedora, Arch)
+   - Windows & WASAPI Driver Strategy
+   - Mobile & Embedded (Termux Android, Raspberry Pi)
+
+7. **[Troubleshooting & FAQ](wiki/7-Troubleshooting-and-FAQ.md)**
+   - Audio Hardware & 48 kHz Sample Rate Setup
+   - NAT Traversal & DERP Relays
+   - Terminal Hotkey Configuration & Troubleshooting
+
+8. **[Git Branching & Release Strategy](wiki/8-Git-Branching-and-Release-Strategy.md)**
+   - Git Flow / GitHub Flow Hybrid Model
+   - Branch Hierarchy (`main`, `develop`, `feature/*`, `fix/*`)
+   - PR Review & Automated Release Workflow
+
+9. **[Interface Design](wiki/9-Interface-Design.md)**
+   - The Audio Screen and the Microphone Noise Floor
+   - Per-Person Volume and Silencing
+   - Meters, Marks, and What the Roster Says
+   - Sounds, Key Clicks, and Remembered Settings
+
+---
+
+## ⚡ Quick Navigation
+
+- **Main Repository**: [github.com/bilalyazicioglu/tincan-cli](https://github.com/bilalyazicioglu/tincan-cli)
+- **Developer Story**: [Blog Post (EN)](https://bilalyazicioglu.com/blog/tincan-serverless-voice-chat-in-terminal) · [Blog Post (TR)](https://bilalyazicioglu.com/blog/tincan-terminalde-sesli-sohbet)
+- **Contributing Guidelines**: [CONTRIBUTING.md](../CONTRIBUTING.md)
+- **Issue Tracker**: [GitHub Issues](https://github.com/bilalyazicioglu/tincan-cli/issues)

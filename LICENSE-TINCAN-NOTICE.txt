@@ -1,0 +1,7 @@
+Tincan license notice
+
+The bundled Tincan executable is a separate third-party component.
+Tincan is distributed under the MIT License.
+
+When redistributing a FakeDiscord build containing tincan.exe, include the
+original Tincan copyright/license notice from the exact Tincan release used.
