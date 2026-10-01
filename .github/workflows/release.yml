@@ -179,12 +179,12 @@ jobs:
           FakeDiscord stable release $VERSION.
 
           Highlights:
-          - Windows settings now use dropdown lists for PTT hotkey and file-size limit
+          - Windows PTT and file-size selectors now match the FakeDiscord blue/dark launcher style
+          - themed dropdown menus replace the default gray Windows ComboBox controls
           - PTT choices include keyboard keys plus Mouse4 and Mouse5
           - file-size limit can be selected from 1 to 16 GiB and is saved immediately
+          - updater verifies SHA-256 and can detect rebuilt same-version artifacts
           - encrypted P2P voice/text and direct P2P file transfer through the modified Tincan core
-          - global hold-to-talk PTT on Windows and KDE Wayland/Arch
-          - GitHub Releases based updater with SHA-256 verification
 
           Development and refactoring were performed with substantial assistance from ChatGPT by OpenAI under human direction and review.
           EOF

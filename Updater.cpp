@@ -653,6 +653,28 @@ CheckResult CheckForUpdate()
         return result;
     }
 
+    if (comparison == 0)
+    {
+        const fs::path currentExe = CurrentExecutablePath();
+        if (currentExe.empty())
+        {
+            result.success = false;
+            result.error = L"Не удалось определить текущий FakeDiscord.exe для проверки SHA-256.";
+            return result;
+        }
+
+        std::wstring currentHash;
+        if (!Sha256File(currentExe, currentHash, result.error))
+        {
+            result.success = false;
+            return result;
+        }
+
+        result.updateAvailable =
+            Lower(currentHash) != Lower(result.update.sha256);
+        return result;
+    }
+
     result.updateAvailable = comparison > 0;
     return result;
 }

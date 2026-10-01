@@ -363,6 +363,12 @@ namespace ui
         SelectObject(item.hDC, font);
 
         RECT textRect = item.rcItem;
+        const bool choiceButton =
+            item.CtlID == app::SetPttKey ||
+            item.CtlID == app::SetMaxFile;
+
+        if (choiceButton)
+            textRect.right -= Scale(window, 44);
 
         DrawTextW(
             item.hDC,
@@ -374,6 +380,21 @@ namespace ui
                 DT_VCENTER |
                 DT_END_ELLIPSIS |
                 DT_NOPREFIX);
+
+        if (choiceButton)
+        {
+            RECT arrowRect = item.rcItem;
+            arrowRect.left = arrowRect.right - Scale(window, 44);
+            DrawTextW(
+                item.hDC,
+                L"▼",
+                -1,
+                &arrowRect,
+                DT_SINGLELINE |
+                    DT_CENTER |
+                    DT_VCENTER |
+                    DT_NOPREFIX);
+        }
 
         if ((item.itemState & ODS_FOCUS) != 0)
         {
@@ -389,6 +410,92 @@ namespace ui
                 &focus);
         }
 
+        return true;
+    }
+
+    bool MeasureChoiceMenuItem(
+        MEASUREITEMSTRUCT& item,
+        HWND window)
+    {
+        if (item.CtlType != ODT_MENU || item.itemData == 0)
+            return false;
+
+        item.itemWidth = static_cast<UINT>(Scale(window, 500));
+        item.itemHeight = static_cast<UINT>(Scale(window, 42));
+        return true;
+    }
+
+    bool DrawChoiceMenuItem(
+        const DRAWITEMSTRUCT& item,
+        HWND window,
+        HFONT font)
+    {
+        if (item.CtlType != ODT_MENU || item.itemData == 0)
+            return false;
+
+        const auto* text =
+            reinterpret_cast<const wchar_t*>(item.itemData);
+        const bool selected =
+            (item.itemState & ODS_SELECTED) != 0;
+        const bool checked =
+            (item.itemState & ODS_CHECKED) != 0;
+
+        HBRUSH background = CreateSolidBrush(
+            selected ? RGB(61, 55, 138) : RGB(24, 24, 29));
+        FillRect(item.hDC, &item.rcItem, background);
+        DeleteObject(background);
+
+        HPEN separator = CreatePen(
+            PS_SOLID,
+            1,
+            selected ? RGB(103, 94, 210) : RGB(48, 48, 56));
+        HGDIOBJ oldPen = SelectObject(item.hDC, separator);
+        MoveToEx(
+            item.hDC,
+            item.rcItem.left,
+            item.rcItem.bottom - 1,
+            nullptr);
+        LineTo(
+            item.hDC,
+            item.rcItem.right,
+            item.rcItem.bottom - 1);
+        SelectObject(item.hDC, oldPen);
+        DeleteObject(separator);
+
+        SetBkMode(item.hDC, TRANSPARENT);
+        SetTextColor(item.hDC, RGB(245, 245, 250));
+        SelectObject(item.hDC, font);
+
+        RECT textRect = item.rcItem;
+        textRect.left += Scale(window, 42);
+        textRect.right -= Scale(window, 18);
+
+        if (checked)
+        {
+            RECT checkRect = item.rcItem;
+            checkRect.left += Scale(window, 12);
+            checkRect.right = checkRect.left + Scale(window, 22);
+            DrawTextW(
+                item.hDC,
+                L"✓",
+                -1,
+                &checkRect,
+                DT_SINGLELINE |
+                    DT_CENTER |
+                    DT_VCENTER |
+                    DT_NOPREFIX);
+        }
+
+        DrawTextW(
+            item.hDC,
+            text,
+            -1,
+            &textRect,
+            DT_SINGLELINE |
+                DT_LEFT |
+                DT_VCENTER |
+                DT_END_ELLIPSIS |
+                DT_NOPREFIX);
         return true;
     }
 }

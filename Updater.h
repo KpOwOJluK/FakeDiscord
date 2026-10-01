@@ -25,7 +25,7 @@ struct CheckResult
 /// Возвращает версию текущей сборки FakeDiscord.
 const wchar_t* CurrentVersion();
 
-/// Запрашивает manifest и определяет наличие более новой Windows-сборки.
+/// Запрашивает manifest и определяет наличие новой или пересобранной Windows-сборки.
 CheckResult CheckForUpdate();
 
 /// Скачивает бинарник и проверяет размер и SHA-256 до установки.

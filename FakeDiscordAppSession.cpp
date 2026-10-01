@@ -56,6 +56,52 @@ std::wstring FileLimitChoiceText(bool english, int gib)
     return (english ? L"File limit: " : L"Лимит файла: ") +
         std::to_wstring(gib) + (english ? L" GiB" : L" ГиБ");
 }
+
+int ShowChoiceMenu(
+    HWND owner,
+    HWND anchor,
+    const std::vector<std::wstring>& labels,
+    int selectedIndex)
+{
+    if (!owner || !anchor || labels.empty())
+        return -1;
+
+    HMENU menu = CreatePopupMenu();
+    if (!menu)
+        return -1;
+
+    for (size_t index = 0; index < labels.size(); ++index)
+    {
+        MENUITEMINFOW item{};
+        item.cbSize = sizeof(item);
+        item.fMask = MIIM_ID | MIIM_FTYPE | MIIM_DATA | MIIM_STATE;
+        item.fType = MFT_OWNERDRAW;
+        item.fState =
+            static_cast<int>(index) == selectedIndex
+                ? MFS_CHECKED
+                : MFS_ENABLED;
+        item.wID = static_cast<UINT>(index + 1);
+        item.dwItemData = reinterpret_cast<ULONG_PTR>(labels[index].c_str());
+        InsertMenuItemW(menu, static_cast<UINT>(index), TRUE, &item);
+    }
+
+    RECT anchorRect{};
+    GetWindowRect(anchor, &anchorRect);
+
+    const UINT command = TrackPopupMenuEx(
+        menu,
+        TPM_LEFTALIGN |
+            TPM_TOPALIGN |
+            TPM_RETURNCMD |
+            TPM_RIGHTBUTTON,
+        anchorRect.left,
+        anchorRect.bottom + 2,
+        owner,
+        nullptr);
+
+    DestroyMenu(menu);
+    return command > 0 ? static_cast<int>(command - 1) : -1;
+}
 }
 
 /// Принудительно завершает активный Tincan и освобождает объект ConPTY-сессии.
@@ -123,29 +169,13 @@ void FakeDiscordApp::ShowSettings()
     CreateButton(notifications.c_str(), app::ToggleNotifications);
     CreateButton(pttMode.c_str(), app::TogglePtt);
 
-    HWND pttCombo = CreateComboBox(app::SetPttKey);
-    if (pttCombo)
-    {
-        for (int index = 0; index < kPttChoiceCount; ++index)
-        {
-            const std::wstring key = PttKeyAt(index);
-            const std::wstring text = PttChoiceText(en, key);
-            SendMessageW(pttCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(text.c_str()));
-        }
-        SendMessageW(pttCombo, CB_SETCURSEL, PttKeyIndex(state_.settings.pttKey), 0);
-    }
+    const std::wstring pttKey =
+        PttChoiceText(en, state_.settings.pttKey);
+    const std::wstring fileLimit =
+        FileLimitChoiceText(en, state_.settings.maxFileGiB);
 
-    HWND fileLimitCombo = CreateComboBox(app::SetMaxFile);
-    if (fileLimitCombo)
-    {
-        for (int gib = 1; gib <= 16; ++gib)
-        {
-            const std::wstring text = FileLimitChoiceText(en, gib);
-            SendMessageW(fileLimitCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(text.c_str()));
-        }
-        SendMessageW(fileLimitCombo, CB_SETCURSEL, state_.settings.maxFileGiB - 1, 0);
-    }
-
+    CreateButton(pttKey.c_str(), app::SetPttKey);
+    CreateButton(fileLimit.c_str(), app::SetMaxFile);
     CreateButton(serverName.c_str(), app::SetServerName);
     CreateButton(channels.c_str(), app::SetChannels);
     CreateButton(en ? L"Back" : L"Назад", app::SettingsBack);
@@ -614,32 +644,52 @@ void FakeDiscordApp::HandleCommand(int id, int notificationCode)
         break;
 
     case app::SetPttKey:
-        if (notificationCode == CBN_SELCHANGE)
+        if (notificationCode == BN_CLICKED)
         {
-            HWND combo = GetDlgItem(state_.window, app::SetPttKey);
-            const int selected = combo
-                ? static_cast<int>(SendMessageW(combo, CB_GETCURSEL, 0, 0))
-                : CB_ERR;
+            std::vector<std::wstring> labels;
+            labels.reserve(kPttChoiceCount);
+            for (int index = 0; index < kPttChoiceCount; ++index)
+                labels.push_back(PttKeyAt(index));
+
+            const int selected = ShowChoiceMenu(
+                state_.window,
+                GetDlgItem(state_.window, app::SetPttKey),
+                labels,
+                PttKeyIndex(state_.settings.pttKey));
+
             const std::wstring key = PttKeyAt(selected);
             if (!key.empty())
             {
                 state_.settings.pttKey = key;
                 SaveLauncherSettings(state_.paths, state_.settings);
+                ShowSettings();
             }
         }
         break;
 
     case app::SetMaxFile:
-        if (notificationCode == CBN_SELCHANGE)
+        if (notificationCode == BN_CLICKED)
         {
-            HWND combo = GetDlgItem(state_.window, app::SetMaxFile);
-            const int selected = combo
-                ? static_cast<int>(SendMessageW(combo, CB_GETCURSEL, 0, 0))
-                : CB_ERR;
+            std::vector<std::wstring> labels;
+            labels.reserve(16);
+            for (int gib = 1; gib <= 16; ++gib)
+            {
+                labels.push_back(
+                    std::to_wstring(gib) +
+                    (state_.settings.english ? L" GiB" : L" ГиБ"));
+            }
+
+            const int selected = ShowChoiceMenu(
+                state_.window,
+                GetDlgItem(state_.window, app::SetMaxFile),
+                labels,
+                state_.settings.maxFileGiB - 1);
+
             if (selected >= 0 && selected < 16)
             {
                 state_.settings.maxFileGiB = selected + 1;
                 SaveLauncherSettings(state_.paths, state_.settings);
+                ShowSettings();
             }
         }
         break;

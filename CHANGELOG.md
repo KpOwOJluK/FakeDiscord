@@ -4,10 +4,11 @@ This changelog summarizes the FakeDiscord fork milestones.
 
 ## 0.3.2-fd15
 
-- Windows settings now use dropdown lists for the PTT hotkey and file-size limit.
-- PTT dropdown includes F1-F12, A-Z, 0-9, Space, CapsLock, Mouse4 and Mouse5.
-- File-size dropdown exposes all supported limits from 1 to 16 GiB and saves the selection immediately.
-- Windows launcher release version bumped for GitHub updater delivery.
+- Windows PTT hotkey and file-size selections now use themed dropdown menus that match the FakeDiscord launcher style.
+- Closed selectors use the same owner-draw blue buttons as the rest of Settings; popup menus use the dark FakeDiscord palette.
+- PTT choices include F1-F12, A-Z, 0-9, Space, CapsLock, Mouse4 and Mouse5.
+- File-size choices cover all supported limits from 1 to 16 GiB and save immediately.
+- Updater can detect a rebuilt artifact with the same version by comparing the local executable SHA-256 with the release manifest.
 
 ## 0.3.2-fd14
 

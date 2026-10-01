@@ -170,16 +170,30 @@ LRESULT FakeDiscordApp::HandleMessage(
         HandleResize();
         return 0;
 
+    case WM_MEASUREITEM:
+    {
+        auto* item =
+            reinterpret_cast<MEASUREITEMSTRUCT*>(lParam);
+
+        if (item && ui::MeasureChoiceMenuItem(*item, window))
+            return TRUE;
+        break;
+    }
+
     case WM_DRAWITEM:
     {
         const auto* item =
             reinterpret_cast<const DRAWITEMSTRUCT*>(lParam);
 
         if (item &&
-            ui::DrawButton(
-                *item,
-                window,
-                state_.resources.UiFont()))
+            (ui::DrawButton(
+                 *item,
+                 window,
+                 state_.resources.UiFont()) ||
+             ui::DrawChoiceMenuItem(
+                 *item,
+                 window,
+                 state_.resources.UiFont())))
         {
             return TRUE;
         }

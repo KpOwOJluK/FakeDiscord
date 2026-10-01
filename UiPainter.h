@@ -37,4 +37,15 @@ namespace ui
         const DRAWITEMSTRUCT& item,
         HWND window,
         HFONT font);
+
+    /// Задаёт размер пунктов фирменного выпадающего меню настроек.
+    bool MeasureChoiceMenuItem(
+        MEASUREITEMSTRUCT& item,
+        HWND window);
+
+    /// Рисует пункт выпадающего меню в цветах интерфейса FakeDiscord.
+    bool DrawChoiceMenuItem(
+        const DRAWITEMSTRUCT& item,
+        HWND window,
+        HFONT font);
 }

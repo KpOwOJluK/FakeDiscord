@@ -51,9 +51,6 @@ private:
     /// Создаёт обычное текстовое поле ввода.
     HWND CreateEdit();
 
-    /// Создаёт read-only выпадающий список для параметров настроек.
-    HWND CreateComboBox(int id);
-
     /// Удаляет все дочерние контролы текущего экрана.
     void DestroyControls();
 
