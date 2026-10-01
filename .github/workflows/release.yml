@@ -1,0 +1,204 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    env:
+      OPUS_STATIC: "1"
+      NO_PAUSE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tincan-src
+
+      - name: Test core
+        working-directory: tincan-src
+        run: cargo test --lib --locked
+
+      - name: Build core
+        working-directory: tincan-src
+        run: cargo build --release --locked
+
+      - name: Copy core beside launcher
+        shell: pwsh
+        run: Copy-Item "tincan-src\target\release\tincan.exe" "tincan.exe" -Force
+
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build native launcher
+        shell: cmd
+        run: build_msvc.bat
+
+      - name: Verify version
+        shell: pwsh
+        run: |
+          $expected = (Select-String -Path AppTypes.h -Pattern 'kAppVersion\[\].*L"([^"]+)"').Matches[0].Groups[1].Value
+          $actual = (Get-Item .\FakeDiscord.exe).VersionInfo.FileVersion
+          if ($actual -ne $expected) {
+            throw "Version mismatch: expected $expected, got $actual"
+          }
+          Write-Output "FakeDiscord $actual"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: FakeDiscord.exe
+          if-no-files-found: error
+
+  arch:
+    name: Arch Linux x86_64
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --needed --noconfirm git rust pkgconf alsa-lib opus qt6-base imagemagick
+
+      - uses: actions/checkout@v4
+
+      - name: Build and test
+        run: bash arch-linux/build_arch.sh
+
+      - name: Package
+        run: |
+          rm -rf release-stage
+          mkdir -p release-stage/dist
+          cp arch-linux/dist/tincan release-stage/dist/tincan
+          cp arch-linux/dist/fakediscord-gui release-stage/dist/fakediscord-gui
+          cp arch-linux/dist/fakediscord.png release-stage/dist/fakediscord.png
+          cp arch-linux/fakediscord release-stage/fakediscord
+          cp arch-linux/install_arch.sh release-stage/install_arch.sh
+          chmod 0755             release-stage/dist/tincan             release-stage/dist/fakediscord-gui             release-stage/fakediscord             release-stage/install_arch.sh
+          tar -C release-stage -czf FakeDiscord-arch-x86_64.tar.gz             dist fakediscord install_arch.sh
+
+      - name: Verify package layout
+        run: |
+          tar -tzf FakeDiscord-arch-x86_64.tar.gz
+          tar -tzf FakeDiscord-arch-x86_64.tar.gz | grep -qx 'dist/tincan'
+          tar -tzf FakeDiscord-arch-x86_64.tar.gz | grep -qx 'dist/fakediscord-gui'
+          tar -tzf FakeDiscord-arch-x86_64.tar.gz | grep -qx 'dist/fakediscord.png'
+          tar -tzf FakeDiscord-arch-x86_64.tar.gz | grep -qx 'fakediscord'
+          tar -tzf FakeDiscord-arch-x86_64.tar.gz | grep -qx 'install_arch.sh'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch-x86_64
+          path: FakeDiscord-arch-x86_64.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: [windows, arch]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Build manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n 's/.*kAppVersion\[\].*L"\([^"]*\)".*/\1/p' AppTypes.h | head -n1)"
+          if [ -z "$VERSION" ]; then
+            echo "::error::could not read version from AppTypes.h"
+            exit 1
+          fi
+
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            if [ "$TAG" != "v$VERSION" ]; then
+              echo "::error::tag $TAG does not match app version v$VERSION"
+              exit 1
+            fi
+          fi
+
+          export VERSION
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          root = Path("release-assets")
+          version = os.environ["VERSION"]
+
+          def artifact(name):
+              path = root / name
+              return {
+                  "file": name,
+                  "url": name,
+                  "size": path.stat().st_size,
+                  "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+              }
+
+          manifest = {
+              "schema": 2,
+              "channel": "stable",
+              "version": version,
+              "published_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+              "artifacts": {
+                  "windows-x64": artifact("FakeDiscord.exe"),
+                  "linux-x86_64": artifact("FakeDiscord-arch-x86_64.tar.gz"),
+              },
+          }
+
+          (root / "manifest.json").write_text(
+              json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+          cat > release-assets/release-notes.md <<EOF
+          ## FakeDiscord $VERSION
+
+          First public GitHub release of FakeDiscord.
+
+          Highlights:
+          - Windows native launcher and Arch Linux Qt launcher
+          - encrypted P2P voice/text through the modified Tincan core
+          - persistent private-server identity with one-time invites and device allowlist
+          - direct P2P file transfer with streaming and BLAKE2s-256 verification
+          - global hold-to-talk PTT on Windows and KDE Wayland/Arch
+          - microphone open/close notification sounds
+          - GitHub Releases based updater; Tailscale/Funnel removed
+
+          Development and refactoring were performed with substantial assistance from ChatGPT by OpenAI under human direction and review.
+          EOF
+
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          sha256sum release-assets/FakeDiscord.exe
+          sha256sum release-assets/FakeDiscord-arch-x86_64.tar.gz
+          cat release-assets/manifest.json
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG"             --title "FakeDiscord ${VERSION}"             --notes-file release-assets/release-notes.md             release-assets/FakeDiscord.exe             release-assets/FakeDiscord-arch-x86_64.tar.gz             release-assets/manifest.json

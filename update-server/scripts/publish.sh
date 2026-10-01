@@ -25,13 +25,14 @@ cp -f "$WIN_SOURCE" "$PUBLIC_DIR/FakeDiscord.exe"
 
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
-cp -f "$LINUX_CORE" "$stage/tincan"
+mkdir -p "$stage/dist"
+cp -f "$LINUX_CORE" "$stage/dist/tincan"
+cp -f "$LINUX_GUI" "$stage/dist/fakediscord-gui"
+cp -f "$LINUX_ICON" "$stage/dist/fakediscord.png"
 cp -f "$LINUX_LAUNCHER" "$stage/fakediscord"
-cp -f "$LINUX_GUI" "$stage/fakediscord-gui"
-cp -f "$LINUX_ICON" "$stage/fakediscord.png"
 cp -f "$LINUX_INSTALLER" "$stage/install_arch.sh"
-chmod 0755 "$stage/tincan" "$stage/fakediscord" "$stage/fakediscord-gui" "$stage/install_arch.sh"
-tar -C "$stage" -czf "$PUBLIC_DIR/FakeDiscord-arch-x86_64.tar.gz"     tincan fakediscord fakediscord-gui fakediscord.png install_arch.sh
+chmod 0755 "$stage/dist/tincan" "$stage/fakediscord" "$stage/dist/fakediscord-gui" "$stage/install_arch.sh"
+tar -C "$stage" -czf "$PUBLIC_DIR/FakeDiscord-arch-x86_64.tar.gz"     dist fakediscord install_arch.sh
 
 export VERSION PUBLIC_DIR
 python3 - <<'PY'
