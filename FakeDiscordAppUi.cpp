@@ -84,6 +84,44 @@ HWND FakeDiscordApp::CreateEdit()
     return control;
 }
 
+/// Создаёт read-only ComboBox для выбора параметров настроек.
+HWND FakeDiscordApp::CreateComboBox(int id)
+{
+    const DWORD style =
+        WS_CHILD |
+        WS_VISIBLE |
+        WS_TABSTOP |
+        WS_VSCROLL |
+        CBS_DROPDOWNLIST |
+        CBS_HASSTRINGS;
+
+    HWND control = CreateWindowExW(
+        0,
+        L"COMBOBOX",
+        L"",
+        style,
+        0,
+        0,
+        100,
+        280,
+        state_.window,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
+        state_.instance,
+        nullptr);
+
+    if (!control)
+        return nullptr;
+
+    SendMessageW(
+        control,
+        WM_SETFONT,
+        reinterpret_cast<WPARAM>(state_.resources.UiFont()),
+        TRUE);
+
+    state_.controls.push_back(control);
+    return control;
+}
+
 /// Удаляет все дочерние HWND, созданные для текущего экрана.
 void FakeDiscordApp::DestroyControls()
 {
@@ -152,12 +190,17 @@ void FakeDiscordApp::LayoutControls(int width, int height)
 
         for (HWND control : state_.controls)
         {
+            const int id = GetDlgCtrlID(control);
+            const bool combo =
+                id == app::SetPttKey ||
+                id == app::SetMaxFile;
+
             MoveWindow(
                 control,
                 x,
-                y,
+                combo ? y + ui::Scale(state_.window, 7) : y,
                 buttonWidth,
-                buttonHeight,
+                combo ? ui::Scale(state_.window, 280) : buttonHeight,
                 TRUE);
 
             y += buttonHeight + gap;

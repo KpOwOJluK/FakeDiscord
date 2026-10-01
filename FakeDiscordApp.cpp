@@ -207,7 +207,7 @@ LRESULT FakeDiscordApp::HandleMessage(
         return 0;
 
     case WM_COMMAND:
-        HandleCommand(LOWORD(wParam));
+        HandleCommand(LOWORD(wParam), HIWORD(wParam));
         return 0;
 
     case WM_LBUTTONDOWN:

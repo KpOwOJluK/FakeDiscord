@@ -7,7 +7,7 @@ namespace app
 {
     inline constexpr wchar_t kWindowClass[] = L"FakeDiscordConPtyWindow";
     inline constexpr wchar_t kTitle[] = L"FakeDiscord";
-    inline constexpr wchar_t kAppVersion[] = L"0.3.2-fd14";
+    inline constexpr wchar_t kAppVersion[] = L"0.3.2-fd15";
 
     inline constexpr int kHeaderHeight = 74;
     inline constexpr int kMargin = 18;

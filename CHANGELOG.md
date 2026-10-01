@@ -2,6 +2,13 @@
 
 This changelog summarizes the FakeDiscord fork milestones.
 
+## 0.3.2-fd15
+
+- Windows settings now use dropdown lists for the PTT hotkey and file-size limit.
+- PTT dropdown includes F1-F12, A-Z, 0-9, Space, CapsLock, Mouse4 and Mouse5.
+- File-size dropdown exposes all supported limits from 1 to 16 GiB and saves the selection immediately.
+- Windows launcher release version bumped for GitHub updater delivery.
+
 ## 0.3.2-fd14
 
 - Removed Tailscale/Funnel from the project and update path.

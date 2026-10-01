@@ -51,6 +51,9 @@ private:
     /// Создаёт обычное текстовое поле ввода.
     HWND CreateEdit();
 
+    /// Создаёт read-only выпадающий список для параметров настроек.
+    HWND CreateComboBox(int id);
+
     /// Удаляет все дочерние контролы текущего экрана.
     void DestroyControls();
 
@@ -101,8 +104,8 @@ private:
     /// Завершает и освобождает текущую ConPTY-сессию.
     void StopSession();
 
-    /// Обрабатывает нажатие кнопки или команду дочернего контрола.
-    void HandleCommand(int id);
+    /// Обрабатывает нажатие кнопки или уведомление дочернего контрола.
+    void HandleCommand(int id, int notificationCode);
 
     /// Регистрирует системный Raw Input для фонового PTT даже без фокуса окна.
     bool RegisterGlobalPttInput();

@@ -9,6 +9,55 @@
 #include "PttKey.h"
 #include "Updater.h"
 
+namespace
+{
+constexpr int kPttChoiceCount = 52;
+
+std::wstring PttKeyAt(int index)
+{
+    if (index >= 0 && index < 12)
+        return L"F" + std::to_wstring(index + 1);
+
+    index -= 12;
+    if (index >= 0 && index < 26)
+        return std::wstring(1, static_cast<wchar_t>(L'A' + index));
+
+    index -= 26;
+    if (index >= 0 && index < 10)
+        return std::wstring(1, static_cast<wchar_t>(L'0' + index));
+
+    switch (index - 10)
+    {
+    case 0: return L"SPACE";
+    case 1: return L"CAPSLOCK";
+    case 2: return L"MOUSE4";
+    case 3: return L"MOUSE5";
+    default: return L"";
+    }
+}
+
+int PttKeyIndex(const std::wstring& key)
+{
+    for (int index = 0; index < kPttChoiceCount; ++index)
+    {
+        if (PttKeyAt(index) == key)
+            return index;
+    }
+    return 3; // F4
+}
+
+std::wstring PttChoiceText(bool english, const std::wstring& key)
+{
+    return (english ? L"PTT key: " : L"Клавиша PTT: ") + key;
+}
+
+std::wstring FileLimitChoiceText(bool english, int gib)
+{
+    return (english ? L"File limit: " : L"Лимит файла: ") +
+        std::to_wstring(gib) + (english ? L" GiB" : L" ГиБ");
+}
+}
+
 /// Принудительно завершает активный Tincan и освобождает объект ConPTY-сессии.
 void FakeDiscordApp::StopSession()
 {
@@ -65,11 +114,6 @@ void FakeDiscordApp::ShowSettings()
         en
             ? std::wstring(L"Push-to-talk: ") + (state_.settings.pttEnabled ? L"On" : L"Off")
             : std::wstring(L"Push-to-talk: ") + (state_.settings.pttEnabled ? L"Вкл" : L"Выкл");
-    const std::wstring pttKey =
-        (en ? L"PTT key: " : L"Клавиша PTT: ") + state_.settings.pttKey;
-    const std::wstring maxFile =
-        (en ? L"Max outgoing file: " : L"Макс. размер отправки: ") +
-        std::to_wstring(state_.settings.maxFileGiB) + L" GiB";
     const std::wstring serverName =
         (en ? L"Server name: " : L"Имя сервера: ") + state_.settings.serverName;
     const std::wstring channels =
@@ -78,8 +122,30 @@ void FakeDiscordApp::ShowSettings()
     CreateButton(language.c_str(), app::ToggleLanguage);
     CreateButton(notifications.c_str(), app::ToggleNotifications);
     CreateButton(pttMode.c_str(), app::TogglePtt);
-    CreateButton(pttKey.c_str(), app::SetPttKey);
-    CreateButton(maxFile.c_str(), app::SetMaxFile);
+
+    HWND pttCombo = CreateComboBox(app::SetPttKey);
+    if (pttCombo)
+    {
+        for (int index = 0; index < kPttChoiceCount; ++index)
+        {
+            const std::wstring key = PttKeyAt(index);
+            const std::wstring text = PttChoiceText(en, key);
+            SendMessageW(pttCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(text.c_str()));
+        }
+        SendMessageW(pttCombo, CB_SETCURSEL, PttKeyIndex(state_.settings.pttKey), 0);
+    }
+
+    HWND fileLimitCombo = CreateComboBox(app::SetMaxFile);
+    if (fileLimitCombo)
+    {
+        for (int gib = 1; gib <= 16; ++gib)
+        {
+            const std::wstring text = FileLimitChoiceText(en, gib);
+            SendMessageW(fileLimitCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(text.c_str()));
+        }
+        SendMessageW(fileLimitCombo, CB_SETCURSEL, state_.settings.maxFileGiB - 1, 0);
+    }
+
     CreateButton(serverName.c_str(), app::SetServerName);
     CreateButton(channels.c_str(), app::SetChannels);
     CreateButton(en ? L"Back" : L"Назад", app::SettingsBack);
@@ -477,7 +543,7 @@ void FakeDiscordApp::CheckForUpdates()
 }
 
 /// Выполняет действие, соответствующее идентификатору кнопки.
-void FakeDiscordApp::HandleCommand(int id)
+void FakeDiscordApp::HandleCommand(int id, int notificationCode)
 {
     switch (id)
     {
@@ -548,22 +614,34 @@ void FakeDiscordApp::HandleCommand(int id)
         break;
 
     case app::SetPttKey:
-        ShowPrompt(
-            app::PromptAction::SettingsPttKey,
-            state_.settings.english
-                ? L"PTT key (F1-F12, A-Z, 0-9, Space, CapsLock, Mouse4, Mouse5)"
-                : L"Клавиша PTT (F1-F12, A-Z, 0-9, Пробел, CapsLock, Mouse4, Mouse5)");
-        SetWindowTextW(state_.promptEdit, state_.settings.pttKey.c_str());
-        SendMessageW(state_.promptEdit, EM_SETSEL, 0, -1);
+        if (notificationCode == CBN_SELCHANGE)
+        {
+            HWND combo = GetDlgItem(state_.window, app::SetPttKey);
+            const int selected = combo
+                ? static_cast<int>(SendMessageW(combo, CB_GETCURSEL, 0, 0))
+                : CB_ERR;
+            const std::wstring key = PttKeyAt(selected);
+            if (!key.empty())
+            {
+                state_.settings.pttKey = key;
+                SaveLauncherSettings(state_.paths, state_.settings);
+            }
+        }
         break;
 
     case app::SetMaxFile:
-        ShowPrompt(
-            app::PromptAction::SettingsMaxFile,
-            state_.settings.english
-                ? L"Maximum outgoing file size, GiB (1-16)"
-                : L"Максимальный размер отправляемого файла, ГиБ (1-16)");
-        SetWindowTextW(state_.promptEdit, std::to_wstring(state_.settings.maxFileGiB).c_str());
+        if (notificationCode == CBN_SELCHANGE)
+        {
+            HWND combo = GetDlgItem(state_.window, app::SetMaxFile);
+            const int selected = combo
+                ? static_cast<int>(SendMessageW(combo, CB_GETCURSEL, 0, 0))
+                : CB_ERR;
+            if (selected >= 0 && selected < 16)
+            {
+                state_.settings.maxFileGiB = selected + 1;
+                SaveLauncherSettings(state_.paths, state_.settings);
+            }
+        }
         break;
 
     case app::SetServerName:

@@ -5,8 +5,8 @@ IDI_APP_ICON ICON "FakeDiscord.ico"
 IDR_TINCAN RCDATA "tincan.exe"
 
 1 VERSIONINFO
- FILEVERSION 0,3,2,14
- PRODUCTVERSION 0,3,2,14
+ FILEVERSION 0,3,2,15
+ PRODUCTVERSION 0,3,2,15
  FILEFLAGSMASK 0x3fL
  FILEFLAGS 0x0L
  FILEOS 0x40004L
@@ -19,11 +19,11 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "FakeDiscord"
             VALUE "FileDescription", "Native Tincan ConPTY client"
-            VALUE "FileVersion", "0.3.2-fd14"
+            VALUE "FileVersion", "0.3.2-fd15"
             VALUE "InternalName", "FakeDiscord"
             VALUE "OriginalFilename", "FakeDiscord.exe"
             VALUE "ProductName", "FakeDiscord"
-            VALUE "ProductVersion", "0.3.2-fd14"
+            VALUE "ProductVersion", "0.3.2-fd15"
         END
     END
     BLOCK "VarFileInfo"

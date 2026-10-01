@@ -176,16 +176,15 @@ jobs:
           cat > release-assets/release-notes.md <<EOF
           ## FakeDiscord $VERSION
 
-          First public GitHub release of FakeDiscord.
+          FakeDiscord stable release $VERSION.
 
           Highlights:
-          - Windows native launcher and Arch Linux Qt launcher
-          - encrypted P2P voice/text through the modified Tincan core
-          - persistent private-server identity with one-time invites and device allowlist
-          - direct P2P file transfer with streaming and BLAKE2s-256 verification
+          - Windows settings now use dropdown lists for PTT hotkey and file-size limit
+          - PTT choices include keyboard keys plus Mouse4 and Mouse5
+          - file-size limit can be selected from 1 to 16 GiB and is saved immediately
+          - encrypted P2P voice/text and direct P2P file transfer through the modified Tincan core
           - global hold-to-talk PTT on Windows and KDE Wayland/Arch
-          - microphone open/close notification sounds
-          - GitHub Releases based updater; Tailscale/Funnel removed
+          - GitHub Releases based updater with SHA-256 verification
 
           Development and refactoring were performed with substantial assistance from ChatGPT by OpenAI under human direction and review.
           EOF
