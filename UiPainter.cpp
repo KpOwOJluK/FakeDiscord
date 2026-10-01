@@ -13,7 +13,8 @@ namespace ui
         const RECT& client,
         const UiResources& resources,
         app::ViewMode view,
-        const std::wstring& nickname)
+        const std::wstring& nickname,
+        bool english)
     {
         const int headerHeight = HeaderHeight(window);
         const int margin = Margin(window);
@@ -98,19 +99,20 @@ namespace ui
 
         if (view == app::ViewMode::Terminal)
         {
-            hint =
-                L"F2 Talk · F3 Mute · F5 Deafen · F6 Audio · Esc — отключиться";
+            hint = english
+                ? L"F2 Talk · F3 Mute · F5 Deafen · F6 Audio · Esc — disconnect"
+                : L"F2 Talk · F3 Mute · F5 Deafen · F6 Audio · Esc — отключиться";
         }
         else if (view == app::ViewMode::Devices)
         {
-            hint = L"Enter / Esc — назад";
+            hint = english ? L"Enter / Esc — back" : L"Enter / Esc — назад";
         }
         else
         {
             dynamicHint =
-                L"Ник: " +
+                (english ? L"Nick: " : L"Ник: ") +
                 (nickname.empty()
-                    ? std::wstring(L"(не задан)")
+                    ? std::wstring(english ? L"(not set)" : L"(не задан)")
                     : nickname);
 
             hint = dynamicHint.c_str();
@@ -135,7 +137,8 @@ namespace ui
         const UiResources& resources,
         app::ViewMode view,
         app::PromptAction promptAction,
-        const std::wstring& promptLabel)
+        const std::wstring& promptLabel,
+        bool english)
     {
         RECT body = client;
         body.top =
@@ -156,27 +159,29 @@ namespace ui
         const wchar_t* pageText = nullptr;
 
         if (view == app::ViewMode::Launcher)
-            pageText = L"Нативный клиент Tincan • ConPTY";
-        else if (view == app::ViewMode::CreateMenu)
-            pageText = L"Создание комнаты";
-        else if (view == app::ViewMode::JoinMenu)
-            pageText = L"Подключение";
+        {
+            pageText = english
+                ? L"Private P2P client • persistent device identity"
+                : L"Приватный P2P-клиент • постоянная identity устройства";
+        }
+        else if (view == app::ViewMode::Settings)
+        {
+            pageText = english
+                ? L"Launcher and private server settings"
+                : L"Настройки лаунчера и приватного сервера";
+        }
         else if (view == app::ViewMode::Prompt)
         {
             if (promptAction == app::PromptAction::ChangeNick)
-            {
-                pageText = L"Смена ника";
-            }
-            else if (
-                promptAction == app::PromptAction::HostRoom ||
-                promptAction == app::PromptAction::HostPassphrase)
-            {
-                pageText = L"Создание комнаты";
-            }
+                pageText = english ? L"Change nickname" : L"Смена ника";
+            else if (promptAction == app::PromptAction::SettingsServerName ||
+                     promptAction == app::PromptAction::SettingsChannels ||
+                     promptAction == app::PromptAction::SettingsMaxFile)
+                pageText = english ? L"Settings" : L"Настройки";
             else
-            {
-                pageText = L"Подключение";
-            }
+                pageText = english
+                    ? L"Connect with a one-time invite"
+                    : L"Подключение по одноразовому приглашению";
         }
 
         if (pageText)

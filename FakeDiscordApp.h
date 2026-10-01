@@ -48,8 +48,8 @@ private:
     /// Создаёт кнопку текущего экрана и добавляет её в список контролов.
     HWND CreateButton(const wchar_t* text, int id);
 
-    /// Создаёт поле ввода; при password=true отображает символы как пароль.
-    HWND CreateEdit(bool password);
+    /// Создаёт обычное текстовое поле ввода.
+    HWND CreateEdit();
 
     /// Удаляет все дочерние контролы текущего экрана.
     void DestroyControls();
@@ -72,17 +72,16 @@ private:
     /// Показывает главное меню и завершает активную Tincan-сессию.
     void ShowLauncher();
 
-    /// Показывает подменю создания комнаты.
-    void ShowCreateMenu();
+    /// Показывает настройки лаунчера и создания приватного сервера.
+    void ShowSettings();
 
-    /// Показывает подменю подключения к комнате.
-    void ShowJoinMenu();
+    /// Добавляет к запуску Tincan пользовательский лимит файлов и режим уведомлений.
+    void AppendSessionSettings(std::vector<std::wstring>& args) const;
 
     /// Показывает форму ввода для выбранного сценария.
     void ShowPrompt(
         app::PromptAction action,
-        const wchar_t* label,
-        bool password);
+        const wchar_t* label);
 
     /// Возвращается из формы ввода на логически предыдущий экран.
     void CancelPrompt();
@@ -105,8 +104,26 @@ private:
     /// Обрабатывает нажатие кнопки или команду дочернего контрола.
     void HandleCommand(int id);
 
-    /// Обрабатывает клавиши, требующие логики приложения или VT-последовательностей.
+    /// Регистрирует системный Raw Input для фонового PTT даже без фокуса окна.
+    bool RegisterGlobalPttInput();
+
+    /// Обрабатывает системное Raw Input событие клавиатуры.
+    bool HandleRawInput(LPARAM rawInputHandle);
+
+    /// Возвращает true, если клавиша совпадает с настроенной PTT-клавишей.
+    bool IsPttKey(WPARAM virtualKey) const;
+
+    /// Применяет состояние нажатия/отпускания PTT независимо от фокуса окна.
+    bool HandlePttKeyState(WPARAM virtualKey, bool pressed);
+
+    /// Обрабатывает нажатие клавиши и начало удержания PTT.
     bool HandleKeyDown(WPARAM virtualKey);
+
+    /// Обрабатывает отпускание настроенной PTT-клавиши.
+    bool HandleKeyUp(WPARAM virtualKey);
+
+    /// Принудительно закрывает PTT при потере фокуса или завершении сессии.
+    void ReleasePtt();
 
     /// Обрабатывает текстовый ввод WM_CHAR.
     bool HandleCharacter(WPARAM character);

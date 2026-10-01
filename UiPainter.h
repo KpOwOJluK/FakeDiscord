@@ -18,7 +18,8 @@ namespace ui
         const RECT& client,
         const UiResources& resources,
         app::ViewMode view,
-        const std::wstring& nickname);
+        const std::wstring& nickname,
+        bool english);
 
     /// Рисует фон экранов меню и, при необходимости, карточку формы ввода.
     void DrawPageBackground(
@@ -28,7 +29,8 @@ namespace ui
         const UiResources& resources,
         app::ViewMode view,
         app::PromptAction promptAction,
-        const std::wstring& promptLabel);
+        const std::wstring& promptLabel,
+        bool english);
 
     /// Выполняет owner-draw отрисовку кнопки в едином стиле FakeDiscord.
     bool DrawButton(

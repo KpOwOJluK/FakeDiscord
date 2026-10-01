@@ -105,7 +105,8 @@ void FakeDiscordApp::Paint()
         client,
         state_.resources,
         state_.view,
-        state_.nickname);
+        state_.nickname,
+        state_.settings.english);
 
     if (app::IsTerminalView(state_.view))
     {
@@ -128,7 +129,8 @@ void FakeDiscordApp::Paint()
             state_.resources,
             state_.view,
             state_.promptAction,
-            state_.promptLabel);
+            state_.promptLabel,
+            state_.settings.english);
     }
 
     BitBlt(

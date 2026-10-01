@@ -37,18 +37,15 @@ HWND FakeDiscordApp::CreateButton(const wchar_t* text, int id)
     return control;
 }
 
-/// Создаёт поле ввода и настраивает его отступы и режим пароля.
-HWND FakeDiscordApp::CreateEdit(bool password)
+/// Создаёт обычное поле ввода и настраивает его отступы.
+HWND FakeDiscordApp::CreateEdit()
 {
-    DWORD style =
+    const DWORD style =
         WS_CHILD |
         WS_VISIBLE |
         WS_TABSTOP |
         WS_BORDER |
         ES_AUTOHSCROLL;
-
-    if (password)
-        style |= ES_PASSWORD;
 
     HWND control = CreateWindowExW(
         0,
@@ -82,15 +79,6 @@ HWND FakeDiscordApp::CreateEdit(bool password)
         MAKELPARAM(
             ui::Scale(state_.window, 12),
             ui::Scale(state_.window, 12)));
-
-    if (password)
-    {
-        SendMessageW(
-            control,
-            EM_SETPASSWORDCHAR,
-            static_cast<WPARAM>(L'●'),
-            0);
-    }
 
     state_.controls.push_back(control);
     return control;
@@ -136,8 +124,7 @@ void FakeDiscordApp::LayoutControls(int width, int height)
     const int headerHeight = ui::HeaderHeight(state_.window);
 
     if (state_.view == app::ViewMode::Launcher ||
-        state_.view == app::ViewMode::CreateMenu ||
-        state_.view == app::ViewMode::JoinMenu)
+        state_.view == app::ViewMode::Settings)
     {
         const int availableWidth =
             std::max(1, width - 2 * margin);
@@ -153,9 +140,7 @@ void FakeDiscordApp::LayoutControls(int width, int height)
                 (width - buttonWidth) / 2);
 
         const int startOffset =
-            state_.view == app::ViewMode::Launcher
-                ? 70
-                : 88;
+            state_.view == app::ViewMode::Settings ? 58 : 70;
 
         const int gap = ui::Scale(state_.window, 12);
         const int buttonHeight =

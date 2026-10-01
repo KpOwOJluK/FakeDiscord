@@ -19,6 +19,7 @@ bool FakeDiscordApp::Initialize(int showCommand)
     state_.paths = InitAppPaths();
     EnsureTincanExtracted(state_.paths);
     state_.nickname = LoadNick(state_.paths);
+    state_.settings = LoadLauncherSettings(state_.paths);
 
     return RegisterWindowClass() &&
            CreateMainWindow(showCommand);
@@ -37,7 +38,13 @@ int FakeDiscordApp::RunMessageLoop()
             continue;
         }
 
-        TranslateMessage(&message);
+        const bool pttKeyMessage =
+            state_.view == app::ViewMode::Terminal &&
+            (message.message == WM_KEYDOWN || message.message == WM_KEYUP) &&
+            IsPttKey(message.wParam);
+
+        if (!pttKeyMessage)
+            TranslateMessage(&message);
         DispatchMessageW(&message);
     }
 
@@ -135,6 +142,7 @@ LRESULT FakeDiscordApp::HandleMessage(
 
         state_.resources.ApplyWindowIcons(window);
         DragAcceptFiles(window, TRUE);
+        state_.globalPttInputRegistered = RegisterGlobalPttInput();
 
         SetTimer(
             window,
@@ -146,8 +154,7 @@ LRESULT FakeDiscordApp::HandleMessage(
         {
             ShowPrompt(
                 app::PromptAction::ChangeNick,
-                L"Введите новый ник",
-                false);
+                state_.settings.english ? L"Enter nickname" : L"Введите новый ник");
         }
         else
         {
@@ -231,9 +238,23 @@ LRESULT FakeDiscordApp::HandleMessage(
         HandleDroppedFiles(wParam);
         return 0;
 
+    case WM_INPUT:
+        HandleRawInput(lParam);
+        return DefWindowProcW(window, message, wParam, lParam);
+
     case WM_KEYDOWN:
         if (HandleKeyDown(wParam))
             return 0;
+        break;
+
+    case WM_KEYUP:
+        if (HandleKeyUp(wParam))
+            return 0;
+        break;
+
+    case WM_KILLFOCUS:
+        if (!state_.globalPttInputRegistered)
+            ReleasePtt();
         break;
 
     case WM_CHAR:

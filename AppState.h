@@ -33,7 +33,7 @@ struct AppState
     std::wstring promptLabel;
 
     std::wstring nickname;
-    std::wstring pendingRoom;
+    LauncherSettings settings;
 
     AppPaths paths;
 
@@ -42,4 +42,6 @@ struct AppState
     TerminalSelection selection;
 
     std::unique_ptr<ConPtySession> session;
+    bool pttHeld = false;
+    bool globalPttInputRegistered = false;
 };

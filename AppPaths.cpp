@@ -1,6 +1,7 @@
 #include "Win32Config.h"
 #include "AppPaths.h"
 #include "TextUtil.h"
+#include "PttKey.h"
 #include "resource.h"
 
 #include <windows.h>
@@ -87,6 +88,7 @@ AppPaths InitAppPaths()
     AppPaths paths;
     paths.configDir = fs::path(appData) / L"FakeDiscord";
     paths.nickFile = paths.configDir / L"nick.txt";
+    paths.settingsFile = paths.configDir / L"launcher-settings.conf";
     paths.cacheDir = fs::path(localAppData) / L"FakeDiscord";
     paths.tincanPath = paths.cacheDir / L"tincan.exe";
 
@@ -177,4 +179,62 @@ void SaveNick(const AppPaths& paths, const std::wstring& nick)
     file.write(
         utf8.data(),
         static_cast<std::streamsize>(utf8.size()));
+}
+
+LauncherSettings LoadLauncherSettings(const AppPaths& paths)
+{
+    LauncherSettings settings;
+    std::ifstream file(paths.settingsFile, std::ios::binary);
+    if (!file)
+        return settings;
+
+    std::string line;
+    while (std::getline(file, line))
+    {
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        const auto split = line.find('=');
+        if (split == std::string::npos)
+            continue;
+
+        const std::string key = line.substr(0, split);
+        const std::string value = line.substr(split + 1);
+        if (key == "language")
+            settings.english = value == "en";
+        else if (key == "notifications")
+            settings.notifications = value != "0";
+        else if (key == "ptt_enabled")
+            settings.pttEnabled = value == "1";
+        else if (key == "ptt_key")
+        {
+            const std::wstring normalized = ptt_key::Normalize(Utf8ToWide(value));
+            settings.pttKey = normalized.empty() ? L"F4" : normalized;
+        }
+        else if (key == "max_file_gib")
+        {
+            try { settings.maxFileGiB = std::clamp(std::stoi(value), 1, 16); }
+            catch (...) { settings.maxFileGiB = 8; }
+        }
+        else if (key == "server_name" && !value.empty())
+            settings.serverName = Utf8ToWide(value);
+        else if (key == "channels" && !value.empty())
+            settings.channels = Utf8ToWide(value);
+    }
+    return settings;
+}
+
+void SaveLauncherSettings(const AppPaths& paths, const LauncherSettings& settings)
+{
+    fs::create_directories(paths.configDir);
+    std::ofstream file(paths.settingsFile, std::ios::binary | std::ios::trunc);
+    if (!file)
+        return;
+
+    file << "language=" << (settings.english ? "en" : "ru") << '\n';
+    file << "notifications=" << (settings.notifications ? "1" : "0") << '\n';
+    file << "ptt_enabled=" << (settings.pttEnabled ? "1" : "0") << '\n';
+    file << "ptt_key=" << WideToUtf8(ptt_key::Normalize(settings.pttKey).empty() ? L"F4" : ptt_key::Normalize(settings.pttKey)) << '\n';
+    file << "max_file_gib=" << std::clamp(settings.maxFileGiB, 1, 16) << '\n';
+    file << "server_name=" << WideToUtf8(settings.serverName) << '\n';
+    file << "channels=" << WideToUtf8(settings.channels) << '\n';
 }

@@ -2,20 +2,17 @@
 
 #include <filesystem>
 #include <memory>
+#include <cwchar>
 
 #include "AppPaths.h"
 #include "AppTypes.h"
+#include "PttKey.h"
 #include "Updater.h"
-
-namespace
-{
-    constexpr wchar_t kDefaultRoom[] = L"FakeDiscord";
-    constexpr wchar_t kDefaultPassphrase[] = L"HelldiversDissidents";
-}
 
 /// Принудительно завершает активный Tincan и освобождает объект ConPTY-сессии.
 void FakeDiscordApp::StopSession()
 {
+    ReleasePtt();
     if (!state_.session)
         return;
     state_.session->Stop(true);
@@ -33,60 +30,81 @@ void FakeDiscordApp::ShowLauncher()
 
     DestroyControls();
 
-    CreateButton(L"Создать комнату", app::Create);
+    const bool en = state_.settings.english;
+    CreateButton(en ? L"Start private server" : L"Запустить приватный сервер", app::Create);
+    CreateButton(en ? L"Connect" : L"Подключиться", app::Join);
     CreateButton(
-        L"Подключиться к FakeDiscord",
-        app::QuickJoin);
-    CreateButton(L"Подключиться", app::Join);
-    CreateButton(L"Сменить ник", app::ChangeNick);
-    CreateButton(L"Аудиоустройства", app::Devices);
-    CreateButton(L"Обновить с GitHub", app::Update);
-    CreateButton(L"Выход", app::Exit);
+        en ? L"Connect with one-time invite" : L"Подключиться по одноразовому приглашению",
+        app::JoinInvite);
+    CreateButton(en ? L"Change nickname" : L"Сменить ник", app::ChangeNick);
+    CreateButton(en ? L"Audio devices" : L"Аудиоустройства", app::Devices);
+    CreateButton(en ? L"Settings" : L"Настройки", app::Settings);
+    CreateButton(en ? L"Update from GitHub" : L"Обновить с GitHub", app::Update);
+    CreateButton(en ? L"Exit" : L"Выход", app::Exit);
 
     RefreshView();
 }
 
-/// Показывает варианты создания комнаты.
-void FakeDiscordApp::ShowCreateMenu()
+/// Показывает настройки лаунчера и параметры создания сервера.
+void FakeDiscordApp::ShowSettings()
 {
-    state_.view = app::ViewMode::CreateMenu;
+    StopSession();
+    state_.view = app::ViewMode::Settings;
     state_.promptAction = app::PromptAction::None;
-
+    state_.selection.Clear();
     DestroyControls();
 
-    CreateButton(
-        L"По имени комнаты + passphrase",
-        app::CreateNamed);
-    CreateButton(
-        L"Создать по invite-коду",
-        app::CreateInvite);
-    CreateButton(L"Назад", app::SubmenuBack);
+    const bool en = state_.settings.english;
+    const std::wstring language =
+        (en ? L"Language: English" : L"Язык: Русский");
+    const std::wstring notifications =
+        en
+            ? std::wstring(L"Notifications: ") + (state_.settings.notifications ? L"On" : L"Off")
+            : std::wstring(L"Уведомления: ") + (state_.settings.notifications ? L"Вкл" : L"Выкл");
+    const std::wstring pttMode =
+        en
+            ? std::wstring(L"Push-to-talk: ") + (state_.settings.pttEnabled ? L"On" : L"Off")
+            : std::wstring(L"Push-to-talk: ") + (state_.settings.pttEnabled ? L"Вкл" : L"Выкл");
+    const std::wstring pttKey =
+        (en ? L"PTT key: " : L"Клавиша PTT: ") + state_.settings.pttKey;
+    const std::wstring maxFile =
+        (en ? L"Max outgoing file: " : L"Макс. размер отправки: ") +
+        std::to_wstring(state_.settings.maxFileGiB) + L" GiB";
+    const std::wstring serverName =
+        (en ? L"Server name: " : L"Имя сервера: ") + state_.settings.serverName;
+    const std::wstring channels =
+        (en ? L"Channels: " : L"Каналы: ") + state_.settings.channels;
 
+    CreateButton(language.c_str(), app::ToggleLanguage);
+    CreateButton(notifications.c_str(), app::ToggleNotifications);
+    CreateButton(pttMode.c_str(), app::TogglePtt);
+    CreateButton(pttKey.c_str(), app::SetPttKey);
+    CreateButton(maxFile.c_str(), app::SetMaxFile);
+    CreateButton(serverName.c_str(), app::SetServerName);
+    CreateButton(channels.c_str(), app::SetChannels);
+    CreateButton(en ? L"Back" : L"Назад", app::SettingsBack);
     RefreshView();
 }
 
-/// Показывает варианты подключения к комнате.
-void FakeDiscordApp::ShowJoinMenu()
+/// Добавляет настройки, одинаковые для host и join.
+void FakeDiscordApp::AppendSessionSettings(std::vector<std::wstring>& args) const
 {
-    state_.view = app::ViewMode::JoinMenu;
-    state_.promptAction = app::PromptAction::None;
-
-    DestroyControls();
-
-    CreateButton(L"По invite-коду", app::JoinInvite);
-    CreateButton(
-        L"По имени комнаты + passphrase",
-        app::JoinNamed);
-    CreateButton(L"Назад", app::SubmenuBack);
-
-    RefreshView();
+    args.push_back(L"--max-file-gib");
+    args.push_back(std::to_wstring(state_.settings.maxFileGiB));
+    if (!state_.settings.notifications)
+        args.push_back(L"--no-notifications");
+    if (state_.settings.pttEnabled)
+    {
+        args.push_back(L"--ptt");
+        args.push_back(L"--ptt-key");
+        args.push_back(state_.settings.pttKey);
+    }
 }
 
 /// Открывает унифицированную форму ввода.
 void FakeDiscordApp::ShowPrompt(
     app::PromptAction action,
-    const wchar_t* label,
-    bool password)
+    const wchar_t* label)
 {
     state_.view = app::ViewMode::Prompt;
     state_.promptAction = action;
@@ -94,9 +112,10 @@ void FakeDiscordApp::ShowPrompt(
 
     DestroyControls();
 
-    state_.promptEdit = CreateEdit(password);
-    CreateButton(L"Продолжить", app::PromptOk);
-    CreateButton(L"Назад", app::PromptCancel);
+    state_.promptEdit = CreateEdit();
+    const bool en = state_.settings.english;
+    CreateButton(en ? L"Continue" : L"Продолжить", app::PromptOk);
+    CreateButton(en ? L"Back" : L"Назад", app::PromptCancel);
 
     RefreshView();
 
@@ -109,17 +128,12 @@ void FakeDiscordApp::CancelPrompt()
 {
     switch (state_.promptAction)
     {
-    case app::PromptAction::HostRoom:
-    case app::PromptAction::HostPassphrase:
-        ShowCreateMenu();
+    case app::PromptAction::SettingsServerName:
+    case app::PromptAction::SettingsChannels:
+    case app::PromptAction::SettingsMaxFile:
+    case app::PromptAction::SettingsPttKey:
+        ShowSettings();
         break;
-
-    case app::PromptAction::JoinCode:
-    case app::PromptAction::JoinRoom:
-    case app::PromptAction::JoinPassphrase:
-        ShowJoinMenu();
-        break;
-
     default:
         ShowLauncher();
         break;
@@ -155,55 +169,80 @@ void FakeDiscordApp::SubmitPrompt()
 
     switch (state_.promptAction)
     {
-    case app::PromptAction::HostRoom:
-        state_.pendingRoom = value;
-        ShowPrompt(
-            app::PromptAction::HostPassphrase,
-            L"Введите passphrase",
-            true);
-        break;
-
-    case app::PromptAction::HostPassphrase:
-        StartTerminal({
-            L"host",
-            state_.pendingRoom,
-            L"--name",
-            state_.nickname,
-            L"-p",
-            value});
-        break;
-
     case app::PromptAction::JoinCode:
-        StartTerminal({
+    {
+        std::vector<std::wstring> args{
             L"join",
             value,
             L"--name",
-            state_.nickname});
+            state_.nickname};
+        AppendSessionSettings(args);
+        StartTerminal(args);
         break;
-
-    case app::PromptAction::JoinRoom:
-        state_.pendingRoom = value;
-        ShowPrompt(
-            app::PromptAction::JoinPassphrase,
-            L"Введите passphrase",
-            true);
-        break;
-
-    case app::PromptAction::JoinPassphrase:
-        StartTerminal({
-            L"join",
-            state_.pendingRoom,
-            L"--name",
-            state_.nickname,
-            L"-p",
-            value});
-        break;
+    }
 
     case app::PromptAction::ChangeNick:
         state_.nickname = value;
         SaveNick(state_.paths, state_.nickname);
         ShowLauncher();
         break;
+
+    case app::PromptAction::SettingsServerName:
+        state_.settings.serverName = value;
+        SaveLauncherSettings(state_.paths, state_.settings);
+        ShowSettings();
+        break;
+
+    case app::PromptAction::SettingsChannels:
+        state_.settings.channels = value;
+        SaveLauncherSettings(state_.paths, state_.settings);
+        ShowSettings();
+        break;
+
+    case app::PromptAction::SettingsPttKey:
+    {
+        const std::wstring normalized = ptt_key::Normalize(value);
+        if (normalized.empty())
+        {
+            MessageBoxW(
+                state_.window,
+                state_.settings.english
+                    ? L"Supported PTT keys: F1-F12, A-Z, 0-9, Space, CapsLock."
+                    : L"Поддерживаются PTT-клавиши: F1-F12, A-Z, 0-9, Пробел, CapsLock.",
+                app::kTitle,
+                MB_OK | MB_ICONWARNING);
+            SetFocus(state_.promptEdit);
+            return;
+        }
+
+        state_.settings.pttKey = normalized;
+        SaveLauncherSettings(state_.paths, state_.settings);
+        ShowSettings();
+        break;
+    }
+
+    case app::PromptAction::SettingsMaxFile:
+    {
+        wchar_t* end = nullptr;
+        const long parsed = std::wcstol(value.c_str(), &end, 10);
+        if (!end || *end != L'\0' || parsed < 1 || parsed > 16)
+        {
+            MessageBoxW(
+                state_.window,
+                state_.settings.english
+                    ? L"Enter a whole number from 1 to 16 GiB."
+                    : L"Введите целое число от 1 до 16 ГиБ.",
+                app::kTitle,
+                MB_OK | MB_ICONWARNING);
+            SetFocus(state_.promptEdit);
+            return;
+        }
+
+        state_.settings.maxFileGiB = static_cast<int>(parsed);
+        SaveLauncherSettings(state_.paths, state_.settings);
+        ShowSettings();
+        break;
+    }
 
     default:
         ShowLauncher();
@@ -248,7 +287,9 @@ void FakeDiscordApp::StartTerminal(
 
         MessageBoxW(
             state_.window,
-            L"Не удалось запустить Tincan через ConPTY.",
+            state_.settings.english
+                ? L"Could not start Tincan through ConPTY."
+                : L"Не удалось запустить Tincan через ConPTY.",
             app::kTitle,
             MB_OK | MB_ICONERROR);
 
@@ -296,7 +337,9 @@ void FakeDiscordApp::StartDevices()
 
         MessageBoxW(
             state_.window,
-            L"Не удалось получить список аудиоустройств.",
+            state_.settings.english
+                ? L"Could not get the audio device list."
+                : L"Не удалось получить список аудиоустройств.",
             app::kTitle,
             MB_OK | MB_ICONERROR);
 
@@ -311,6 +354,7 @@ void FakeDiscordApp::StartDevices()
 /// Проверяет manifest, скачивает новый EXE и запускает безопасную самозамену.
 void FakeDiscordApp::CheckForUpdates()
 {
+    const bool en = state_.settings.english;
     SetCursor(LoadCursorW(nullptr, IDC_WAIT));
     const updater::CheckResult check = updater::CheckForUpdate();
     SetCursor(LoadCursorW(nullptr, IDC_ARROW));
@@ -318,7 +362,7 @@ void FakeDiscordApp::CheckForUpdates()
     if (!check.success)
     {
         std::wstring message =
-            L"Не удалось проверить обновления.\n\n" + check.error;
+            (en ? L"Could not check for updates.\n\n" : L"Не удалось проверить обновления.\n\n") + check.error;
         MessageBoxW(
             state_.window,
             message.c_str(),
@@ -330,7 +374,7 @@ void FakeDiscordApp::CheckForUpdates()
     if (!check.updateAvailable)
     {
         std::wstring message =
-            L"Установлена актуальная версия: ";
+            en ? L"The current version is installed: " : L"Установлена актуальная версия: ";
         message += updater::CurrentVersion();
 
         MessageBoxW(
@@ -341,10 +385,13 @@ void FakeDiscordApp::CheckForUpdates()
         return;
     }
 
-    std::wstring question =
-        L"Доступна версия " + check.update.version +
-        L".\nТекущая версия: " + updater::CurrentVersion() +
-        L".\n\nСкачать обновление и перезапустить FakeDiscord?";
+    std::wstring question = en
+        ? L"Version " + check.update.version +
+            L" is available.\nCurrent version: " + updater::CurrentVersion() +
+            L".\n\nDownload the update and restart FakeDiscord?"
+        : L"Доступна версия " + check.update.version +
+            L".\nТекущая версия: " + updater::CurrentVersion() +
+            L".\n\nСкачать обновление и перезапустить FakeDiscord?";
 
     if (MessageBoxW(
             state_.window,
@@ -360,7 +407,7 @@ void FakeDiscordApp::CheckForUpdates()
     {
         MessageBoxW(
             state_.window,
-            L"Не удалось определить путь текущего FakeDiscord.exe.",
+            en ? L"Could not determine the path of the current FakeDiscord.exe." : L"Не удалось определить путь текущего FakeDiscord.exe.",
             app::kTitle,
             MB_OK | MB_ICONERROR);
         return;
@@ -388,7 +435,7 @@ void FakeDiscordApp::CheckForUpdates()
             EnableWindow(control, TRUE);
 
         std::wstring message =
-            L"Обновление не установлено.\n\n" + error;
+            (en ? L"The update was not installed.\n\n" : L"Обновление не установлено.\n\n") + error;
         MessageBoxW(
             state_.window,
             message.c_str(),
@@ -406,7 +453,9 @@ void FakeDiscordApp::CheckForUpdates()
             EnableWindow(control, TRUE);
 
         std::wstring message =
-            L"Обновление загружено, но не удалось запустить установку.\n\n" +
+            (en
+                ? L"The update was downloaded, but installation could not be started.\n\n"
+                : L"Обновление загружено, но не удалось запустить установку.\n\n") +
             error;
         MessageBoxW(
             state_.window,
@@ -418,8 +467,9 @@ void FakeDiscordApp::CheckForUpdates()
 
     MessageBoxW(
         state_.window,
-        L"Обновление проверено по SHA-256.\n"
-        L"FakeDiscord сейчас перезапустится.",
+        en
+            ? L"The update was verified with SHA-256.\nFakeDiscord will restart now."
+            : L"Обновление проверено по SHA-256.\nFakeDiscord сейчас перезапустится.",
         app::kTitle,
         MB_OK | MB_ICONINFORMATION);
 
@@ -432,67 +482,112 @@ void FakeDiscordApp::HandleCommand(int id)
     switch (id)
     {
     case app::Create:
-        ShowCreateMenu();
-        break;
-    case app::QuickJoin:
-        StartTerminal({
-            L"join",
-            kDefaultRoom,
+    {
+        std::vector<std::wstring> args{
+            L"host",
             L"--name",
             state_.nickname,
-            L"-p",
-            kDefaultPassphrase});
+            L"--server-name",
+            state_.settings.serverName,
+            L"--channels",
+            state_.settings.channels};
+        AppendSessionSettings(args);
+        StartTerminal(args);
         break;
+    }
 
     case app::Join:
-        ShowJoinMenu();
+    {
+        std::vector<std::wstring> args{
+            L"join",
+            L"--name",
+            state_.nickname};
+        AppendSessionSettings(args);
+        StartTerminal(args);
+        break;
+    }
+
+    case app::JoinInvite:
+        ShowPrompt(
+            app::PromptAction::JoinCode,
+            state_.settings.english
+                ? L"Enter one-time invite"
+                : L"Введите одноразовое приглашение");
         break;
 
     case app::ChangeNick:
         ShowPrompt(
             app::PromptAction::ChangeNick,
-            L"Введите новый ник",
-            false);
+            state_.settings.english ? L"Enter new nickname" : L"Введите новый ник");
         break;
 
     case app::Devices:
         StartDevices();
         break;
 
+    case app::Settings:
+        ShowSettings();
+        break;
+
+    case app::ToggleLanguage:
+        state_.settings.english = !state_.settings.english;
+        SaveLauncherSettings(state_.paths, state_.settings);
+        ShowSettings();
+        break;
+
+    case app::ToggleNotifications:
+        state_.settings.notifications = !state_.settings.notifications;
+        SaveLauncherSettings(state_.paths, state_.settings);
+        ShowSettings();
+        break;
+
+    case app::TogglePtt:
+        state_.settings.pttEnabled = !state_.settings.pttEnabled;
+        SaveLauncherSettings(state_.paths, state_.settings);
+        ShowSettings();
+        break;
+
+    case app::SetPttKey:
+        ShowPrompt(
+            app::PromptAction::SettingsPttKey,
+            state_.settings.english
+                ? L"PTT key (F1-F12, A-Z, 0-9, Space, CapsLock)"
+                : L"Клавиша PTT (F1-F12, A-Z, 0-9, Пробел, CapsLock)");
+        SetWindowTextW(state_.promptEdit, state_.settings.pttKey.c_str());
+        SendMessageW(state_.promptEdit, EM_SETSEL, 0, -1);
+        break;
+
+    case app::SetMaxFile:
+        ShowPrompt(
+            app::PromptAction::SettingsMaxFile,
+            state_.settings.english
+                ? L"Maximum outgoing file size, GiB (1-16)"
+                : L"Максимальный размер отправляемого файла, ГиБ (1-16)");
+        SetWindowTextW(state_.promptEdit, std::to_wstring(state_.settings.maxFileGiB).c_str());
+        break;
+
+    case app::SetServerName:
+        ShowPrompt(
+            app::PromptAction::SettingsServerName,
+            state_.settings.english ? L"Private server display name" : L"Отображаемое имя приватного сервера");
+        SetWindowTextW(state_.promptEdit, state_.settings.serverName.c_str());
+        break;
+
+    case app::SetChannels:
+        ShowPrompt(
+            app::PromptAction::SettingsChannels,
+            state_.settings.english
+                ? L"Channels separated by commas"
+                : L"Каналы через запятую");
+        SetWindowTextW(state_.promptEdit, state_.settings.channels.c_str());
+        break;
+
+    case app::SettingsBack:
+        ShowLauncher();
+        break;
+
     case app::Update:
         CheckForUpdates();
-        break;
-
-    case app::CreateNamed:
-        ShowPrompt(
-            app::PromptAction::HostRoom,
-            L"Введите имя комнаты",
-            false);
-        break;
-
-    case app::CreateInvite:
-        StartTerminal({
-            L"host",
-            L"--name",
-            state_.nickname});
-        break;
-
-    case app::JoinInvite:
-        ShowPrompt(
-            app::PromptAction::JoinCode,
-            L"Введите invite-код",
-            false);
-        break;
-
-    case app::JoinNamed:
-        ShowPrompt(
-            app::PromptAction::JoinRoom,
-            L"Введите имя комнаты",
-            false);
-        break;
-
-    case app::SubmenuBack:
-        ShowLauncher();
         break;
 
     case app::Exit:

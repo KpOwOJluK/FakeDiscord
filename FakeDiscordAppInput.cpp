@@ -9,16 +9,266 @@
 #include "AppTypes.h"
 #include "Clipboard.h"
 #include "DisconnectDialog.h"
+#include "PttKey.h"
 #include "TerminalInput.h"
 #include "TextUtil.h"
 
 namespace
 {
+    enum class DropCommandKind
+    {
+        NewSend,
+        ContinueSend,
+        ContinueSendTo,
+        BusyFileCommand
+    };
+
+    struct DropCommandContext
+    {
+        DropCommandKind kind = DropCommandKind::NewSend;
+        std::wstring recipientToken;
+        bool needsSeparator = false;
+    };
+
     /// Извлекает координаты мыши из LPARAM клиентского сообщения Win32.
     POINT MousePoint(LPARAM value)
     {
         return POINT{GET_X_LPARAM(value), GET_Y_LPARAM(value)};
     }
+
+    std::wstring CurrentTerminalLine(const TerminalBuffer& terminal)
+    {
+        const TerminalSnapshot snapshot = terminal.Snapshot();
+        if (snapshot.rows <= 0 || snapshot.cols <= 0 ||
+            snapshot.cursorRow < 0 || snapshot.cursorRow >= snapshot.rows)
+        {
+            return {};
+        }
+
+        const int limit = (std::min)(snapshot.cursorCol, snapshot.cols);
+        std::wstring line;
+        line.reserve(static_cast<size_t>(limit));
+
+        for (int column = 0; column < limit; ++column)
+        {
+            const TerminalCell& cell =
+                snapshot.cells[static_cast<size_t>(snapshot.cursorRow * snapshot.cols + column)];
+
+            if (cell.continuation || cell.codepoint == 0)
+                continue;
+
+            if (cell.codepoint <= 0xFFFF)
+                line.push_back(static_cast<wchar_t>(cell.codepoint));
+            else
+                line.push_back(L' ');
+        }
+
+        return line;
+    }
+
+    DropCommandContext DetectDropCommand(const TerminalBuffer& terminal)
+    {
+        const std::wstring line = CurrentTerminalLine(terminal);
+
+        if (line.size() >= 7 &&
+            line.compare(line.size() - 7, 7, L"/sendto") == 0)
+        {
+            return {DropCommandKind::BusyFileCommand, {}, false};
+        }
+
+        const size_t sendToPos = line.rfind(L"/sendto ");
+        if (sendToPos != std::wstring::npos)
+        {
+            const std::wstring rest = line.substr(sendToPos + 8);
+            if (rest.empty())
+                return {DropCommandKind::BusyFileCommand, {}, false};
+
+            std::wstring recipientToken;
+            size_t pathStart = std::wstring::npos;
+
+            if (rest.front() == L'"')
+            {
+                bool escaped = false;
+                size_t closingQuote = std::wstring::npos;
+
+                for (size_t index = 1; index < rest.size(); ++index)
+                {
+                    const wchar_t ch = rest[index];
+                    if (escaped)
+                    {
+                        escaped = false;
+                        continue;
+                    }
+                    if (ch == L'\\')
+                    {
+                        escaped = true;
+                        continue;
+                    }
+                    if (ch == L'"')
+                    {
+                        closingQuote = index;
+                        break;
+                    }
+                }
+
+                if (closingQuote == std::wstring::npos)
+                    return {DropCommandKind::BusyFileCommand, {}, false};
+
+                recipientToken = rest.substr(0, closingQuote + 1);
+                pathStart = closingQuote + 1;
+            }
+            else
+            {
+                const size_t separator = rest.find_first_of(L" \t");
+                if (separator == std::wstring::npos)
+                {
+                    return {
+                        DropCommandKind::ContinueSendTo,
+                        rest,
+                        true};
+                }
+
+                recipientToken = rest.substr(0, separator);
+                pathStart = separator;
+            }
+
+            const std::wstring pathPart = rest.substr(pathStart);
+            if (pathPart.find_first_not_of(L" \t") == std::wstring::npos)
+            {
+                const bool needsSeparator =
+                    !rest.empty() &&
+                    !iswspace(rest.back());
+
+                return {
+                    DropCommandKind::ContinueSendTo,
+                    recipientToken,
+                    needsSeparator};
+            }
+
+            return {DropCommandKind::BusyFileCommand, {}, false};
+        }
+
+        if (line.size() >= 5 &&
+            line.compare(line.size() - 5, 5, L"/send") == 0)
+        {
+            return {DropCommandKind::ContinueSend, {}, true};
+        }
+
+        const size_t sendPos = line.rfind(L"/send ");
+        if (sendPos != std::wstring::npos)
+        {
+            const std::wstring rest = line.substr(sendPos + 6);
+            if (rest.find_first_not_of(L" \t") == std::wstring::npos)
+                return {DropCommandKind::ContinueSend, {}, false};
+
+            return {DropCommandKind::BusyFileCommand, {}, false};
+        }
+
+        return {DropCommandKind::NewSend, {}, false};
+    }
+}
+
+/// Регистрирует raw keyboard input для получения PTT даже у свёрнутого окна.
+bool FakeDiscordApp::RegisterGlobalPttInput()
+{
+    RAWINPUTDEVICE device{};
+    device.usUsagePage = 0x01; // Generic Desktop Controls.
+    device.usUsage = 0x06;     // Keyboard.
+    device.dwFlags = RIDEV_INPUTSINK;
+    device.hwndTarget = state_.window;
+
+    return RegisterRawInputDevices(&device, 1, sizeof(device)) == TRUE;
+}
+
+/// Применяет состояние PTT независимо от того, находится ли FakeDiscord в фокусе.
+bool FakeDiscordApp::HandlePttKeyState(WPARAM virtualKey, bool pressed)
+{
+    if (state_.view != app::ViewMode::Terminal ||
+        !state_.session ||
+        !IsPttKey(virtualKey))
+    {
+        return false;
+    }
+
+    if (pressed)
+    {
+        if (!state_.pttHeld)
+        {
+            state_.pttHeld = true;
+            state_.session->Write("\x1b[23;8~"); // Ctrl+Alt+Shift+F11 = внутренний PTT-press.
+        }
+    }
+    else
+    {
+        ReleasePtt();
+    }
+
+    return true;
+}
+
+/// Принимает системный raw keyboard input, включая события при свёрнутом окне.
+bool FakeDiscordApp::HandleRawInput(LPARAM rawInputHandle)
+{
+    UINT size = 0;
+    if (GetRawInputData(
+            reinterpret_cast<HRAWINPUT>(rawInputHandle),
+            RID_INPUT,
+            nullptr,
+            &size,
+            sizeof(RAWINPUTHEADER)) == static_cast<UINT>(-1) ||
+        size == 0)
+    {
+        return false;
+    }
+
+    std::vector<BYTE> buffer(size);
+    if (GetRawInputData(
+            reinterpret_cast<HRAWINPUT>(rawInputHandle),
+            RID_INPUT,
+            buffer.data(),
+            &size,
+            sizeof(RAWINPUTHEADER)) != size)
+    {
+        return false;
+    }
+
+    const RAWINPUT* input = reinterpret_cast<const RAWINPUT*>(buffer.data());
+    if (input->header.dwType != RIM_TYPEKEYBOARD)
+        return false;
+
+    const RAWKEYBOARD& keyboard = input->data.keyboard;
+    if (keyboard.VKey == 0 || keyboard.VKey == 255)
+        return false;
+
+    const bool pressed = (keyboard.Flags & RI_KEY_BREAK) == 0;
+    return HandlePttKeyState(static_cast<WPARAM>(keyboard.VKey), pressed);
+}
+
+/// Проверяет совпадение Win32 virtual-key с сохранённой PTT-клавишей.
+bool FakeDiscordApp::IsPttKey(WPARAM virtualKey) const
+{
+    if (!state_.settings.pttEnabled)
+        return false;
+
+    const UINT configured = ptt_key::VirtualKey(state_.settings.pttKey);
+    return configured != 0 && configured == static_cast<UINT>(virtualKey);
+}
+
+/// Закрывает PTT и посылает core отдельное событие отпускания.
+void FakeDiscordApp::ReleasePtt()
+{
+    if (!state_.pttHeld)
+        return;
+
+    state_.pttHeld = false;
+    if (state_.session)
+        state_.session->Write("\x1b[24;8~"); // Ctrl+Alt+Shift+F12 = внутренний PTT-release.
+}
+
+/// Обрабатывает отпускание настроенной PTT-клавиши.
+bool FakeDiscordApp::HandleKeyUp(WPARAM virtualKey)
+{
+    return HandlePttKeyState(virtualKey, false);
 }
 
 /// Обрабатывает клавиатуру терминала и горячие клавиши приложения.
@@ -66,6 +316,10 @@ bool FakeDiscordApp::HandleKeyDown(WPARAM virtualKey)
     {
         return false;
     }
+
+    if (HandlePttKeyState(virtualKey, true))
+        return true;
+
     const bool ctrl =
         (GetKeyState(VK_CONTROL) & 0x8000) != 0;
 
@@ -151,7 +405,7 @@ bool FakeDiscordApp::HandleCharacter(WPARAM character)
 }
 
 /// Отправляет каждый перетащенный файл через существующую команду /send.
-/// Перед вводом принудительно возвращает Tincan на экран чата клавишей F5.
+/// Команда вводится напрямую: F5 в Tincan переключает Deafen и не должен эмулироваться.
 void FakeDiscordApp::HandleDroppedFiles(WPARAM dropHandle)
 {
     HDROP drop =
@@ -214,28 +468,58 @@ void FakeDiscordApp::HandleDroppedFiles(WPARAM dropHandle)
         files.push_back(std::move(path));
     }
 
+    const DropCommandContext context =
+        DetectDropCommand(state_.terminal);
+
     DragFinish(drop);
 
-    if (files.empty())
+    if (files.empty() ||
+        context.kind == DropCommandKind::BusyFileCommand)
     {
         MessageBeep(MB_ICONWARNING);
         return;
     }
 
-    const std::string chatSequence =
-        terminal_input::KeySequence(VK_F5);
-
-    if (!chatSequence.empty())
-        state_.session->Write(chatSequence);
-
     std::string commands;
 
-    for (const std::wstring& path : files)
+    for (size_t index = 0; index < files.size(); ++index)
     {
-        std::wstring command =
-            L"/send \"" +
-            path +
-            L"\"\r";
+        const std::wstring& path = files[index];
+        const bool first = index == 0;
+        std::wstring command;
+
+        if (first &&
+            context.kind == DropCommandKind::ContinueSend)
+        {
+            if (context.needsSeparator)
+                command += L" ";
+
+            command += L"\"" + path + L"\"\r";
+        }
+        else if (first &&
+                 context.kind == DropCommandKind::ContinueSendTo)
+        {
+            if (context.needsSeparator)
+                command += L" ";
+
+            command += L"\"" + path + L"\"\r";
+        }
+        else if (context.kind == DropCommandKind::ContinueSendTo)
+        {
+            command =
+                L"/sendto " +
+                context.recipientToken +
+                L" \"" +
+                path +
+                L"\"\r";
+        }
+        else
+        {
+            command =
+                L"/send \"" +
+                path +
+                L"\"\r";
+        }
 
         commands += WideToUtf8(command);
     }

@@ -7,7 +7,7 @@ namespace app
 {
     inline constexpr wchar_t kWindowClass[] = L"FakeDiscordConPtyWindow";
     inline constexpr wchar_t kTitle[] = L"FakeDiscord";
-    inline constexpr wchar_t kAppVersion[] = L"0.3.2-fd4";
+    inline constexpr wchar_t kAppVersion[] = L"0.3.2-fd14";
 
     inline constexpr int kHeaderHeight = 74;
     inline constexpr int kMargin = 18;
@@ -19,8 +19,7 @@ namespace app
     enum class ViewMode
     {
         Launcher,
-        CreateMenu,
-        JoinMenu,
+        Settings,
         Prompt,
         Terminal,
         Devices
@@ -29,29 +28,33 @@ namespace app
     enum class PromptAction
     {
         None,
-        HostRoom,
-        HostPassphrase,
         JoinCode,
-        JoinRoom,
-        JoinPassphrase,
-        ChangeNick
+        ChangeNick,
+        SettingsServerName,
+        SettingsChannels,
+        SettingsMaxFile,
+        SettingsPttKey
     };
 
     enum ControlId : int
     {
         Create = 1001,
-        QuickJoin,
         Join,
+        JoinInvite,
         ChangeNick,
         Devices,
+        Settings,
         Update,
         Exit,
 
-        CreateNamed,
-        CreateInvite,
-        JoinInvite,
-        JoinNamed,
-        SubmenuBack,
+        ToggleLanguage,
+        ToggleNotifications,
+        TogglePtt,
+        SetPttKey,
+        SetMaxFile,
+        SetServerName,
+        SetChannels,
+        SettingsBack,
 
         PromptEdit = 1101,
         PromptOk,
