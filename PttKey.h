@@ -29,6 +29,10 @@ namespace ptt_key
             return L"SPACE";
         if (value == L"CAPS" || value == L"CAPSLOCK" || value == L"CAPS LOCK")
             return L"CAPSLOCK";
+        if (value == L"MOUSE4" || value == L"MOUSE 4" || value == L"XBUTTON1")
+            return L"MOUSE4";
+        if (value == L"MOUSE5" || value == L"MOUSE 5" || value == L"XBUTTON2")
+            return L"MOUSE5";
 
         if (value.size() == 1)
         {
@@ -67,6 +71,10 @@ namespace ptt_key
             return VK_SPACE;
         if (key == L"CAPSLOCK")
             return VK_CAPITAL;
+        if (key == L"MOUSE4")
+            return VK_XBUTTON1;
+        if (key == L"MOUSE5")
+            return VK_XBUTTON2;
         if (key.size() == 1)
             return static_cast<UINT>(key.front());
 

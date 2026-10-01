@@ -295,7 +295,7 @@ private:
             keys << QString(c);
         for (QChar c = '0'; c <= '9'; c = QChar(c.unicode() + 1))
             keys << QString(c);
-        keys << "SPACE" << "CAPSLOCK";
+        keys << "SPACE" << "CAPSLOCK" << "MOUSE4" << "MOUSE5";
         pttKey->addItems(keys);
         pttKey->setCurrentText(settings_.pttKey);
 

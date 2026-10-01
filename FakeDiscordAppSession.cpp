@@ -207,8 +207,8 @@ void FakeDiscordApp::SubmitPrompt()
             MessageBoxW(
                 state_.window,
                 state_.settings.english
-                    ? L"Supported PTT keys: F1-F12, A-Z, 0-9, Space, CapsLock."
-                    : L"Поддерживаются PTT-клавиши: F1-F12, A-Z, 0-9, Пробел, CapsLock.",
+                    ? L"Supported PTT keys: F1-F12, A-Z, 0-9, Space, CapsLock, Mouse4, Mouse5."
+                    : L"Поддерживаются PTT-клавиши: F1-F12, A-Z, 0-9, Пробел, CapsLock, Mouse4, Mouse5.",
                 app::kTitle,
                 MB_OK | MB_ICONWARNING);
             SetFocus(state_.promptEdit);
@@ -551,8 +551,8 @@ void FakeDiscordApp::HandleCommand(int id)
         ShowPrompt(
             app::PromptAction::SettingsPttKey,
             state_.settings.english
-                ? L"PTT key (F1-F12, A-Z, 0-9, Space, CapsLock)"
-                : L"Клавиша PTT (F1-F12, A-Z, 0-9, Пробел, CapsLock)");
+                ? L"PTT key (F1-F12, A-Z, 0-9, Space, CapsLock, Mouse4, Mouse5)"
+                : L"Клавиша PTT (F1-F12, A-Z, 0-9, Пробел, CapsLock, Mouse4, Mouse5)");
         SetWindowTextW(state_.promptEdit, state_.settings.pttKey.c_str());
         SendMessageW(state_.promptEdit, EM_SETSEL, 0, -1);
         break;

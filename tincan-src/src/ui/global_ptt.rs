@@ -179,6 +179,8 @@ fn linux_key_code(configured: &str) -> Option<u16> {
     match key.as_str() {
         "SPACE" => Some(57),
         "CAPSLOCK" => Some(58),
+        "MOUSE4" => Some(275), // BTN_SIDE / first thumb button.
+        "MOUSE5" => Some(276), // BTN_EXTRA / second thumb button.
         "1" => Some(2), "2" => Some(3), "3" => Some(4), "4" => Some(5),
         "5" => Some(6), "6" => Some(7), "7" => Some(8), "8" => Some(9),
         "9" => Some(10), "0" => Some(11),
@@ -207,5 +209,7 @@ mod tests {
         assert_eq!(linux_key_code("SPACE"), Some(57));
         assert_eq!(linux_key_code("Q"), Some(16));
         assert_eq!(linux_key_code("F12"), Some(88));
+        assert_eq!(linux_key_code("MOUSE4"), Some(275));
+        assert_eq!(linux_key_code("MOUSE5"), Some(276));
     }
 }

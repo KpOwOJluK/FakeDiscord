@@ -37,7 +37,7 @@ load_settings() {
             ptt_key)
                 value="${value^^}"
                 case "$value" in
-                    F1|F2|F3|F4|F5|F6|F7|F8|F9|F10|F11|F12|SPACE|CAPSLOCK|[A-Z0-9]) PTT_KEY="$value" ;;
+                    F1|F2|F3|F4|F5|F6|F7|F8|F9|F10|F11|F12|SPACE|CAPSLOCK|MOUSE4|MOUSE5|[A-Z0-9]) PTT_KEY="$value" ;;
                 esac
                 ;;
             max_file_gib)
@@ -150,13 +150,13 @@ settings_menu() {
             4)
                 local value=""
                 if [[ "$LANGUAGE" == "en" ]]; then
-                    read -r -p "PTT key (F1-F12, A-Z, 0-9, SPACE, CAPSLOCK): " value
+                    read -r -p "PTT key (F1-F12, A-Z, 0-9, SPACE, CAPSLOCK, MOUSE4, MOUSE5): " value
                 else
-                    read -r -p "Клавиша PTT (F1-F12, A-Z, 0-9, SPACE, CAPSLOCK): " value
+                    read -r -p "Клавиша PTT (F1-F12, A-Z, 0-9, SPACE, CAPSLOCK, MOUSE4, MOUSE5): " value
                 fi
                 value="${value^^}"
                 case "$value" in
-                    F1|F2|F3|F4|F5|F6|F7|F8|F9|F10|F11|F12|SPACE|CAPSLOCK|[A-Z0-9])
+                    F1|F2|F3|F4|F5|F6|F7|F8|F9|F10|F11|F12|SPACE|CAPSLOCK|MOUSE4|MOUSE5|[A-Z0-9])
                         PTT_KEY="$value"; save_settings
                         ;;
                     *)

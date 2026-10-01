@@ -25,19 +25,35 @@ first_keyboard_event() {
     return 1
 }
 
+first_mouse_event() {
+    local event=""
+    for event in /dev/input/event*; do
+        [[ -e "$event" ]] || continue
+        if udevadm info -q property -n "$event" 2>/dev/null | grep -q '^ID_INPUT_MOUSE=1$'; then
+            printf '%s\n' "$event"
+            return 0
+        fi
+    done
+    return 1
+}
+
 install_global_ptt_access() {
     local keyboard=""
+    local mouse=""
     local temp_rule=""
     keyboard="$(first_keyboard_event || true)"
-    if [[ -n "$keyboard" && -r "$keyboard" ]]; then
+    mouse="$(first_mouse_event || true)"
+    if [[ -n "$keyboard" && -r "$keyboard" ]] &&
+       { [[ -z "$mouse" ]] || [[ -r "$mouse" ]]; }; then
         return 0
     fi
 
     temp_rule="$(mktemp)"
     printf '%s
 ' 'SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_KEYBOARD}=="1", TAG+="uaccess"' > "$temp_rule"
+    printf '%s\n' 'SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_MOUSE}=="1", TAG+="uaccess"' >> "$temp_rule"
 
-    echo "Настройка фонового PTT: требуется одноразовое разрешение на чтение клавиатуры."
+    echo "Настройка фонового PTT: требуется одноразовое разрешение на чтение клавиатуры и мыши."
     local install_cmd='install -m 0644 "$1" /etc/udev/rules.d/70-fakediscord-ptt.rules && udevadm control --reload-rules && udevadm trigger --subsystem-match=input --action=change'
 
     if command -v pkexec >/dev/null 2>&1; then
@@ -48,8 +64,10 @@ install_global_ptt_access() {
     rm -f "$temp_rule"
 
     keyboard="$(first_keyboard_event || true)"
-    if [[ -n "$keyboard" && -r "$keyboard" ]]; then
-        echo "Фоновый PTT: доступ к клавиатуре настроен."
+    mouse="$(first_mouse_event || true)"
+    if [[ -n "$keyboard" && -r "$keyboard" ]] &&
+       { [[ -z "$mouse" ]] || [[ -r "$mouse" ]]; }; then
+        echo "Фоновый PTT: доступ к клавиатуре и мыши настроен."
     else
         echo "Внимание: глобальный PTT пока недоступен; терминальный PTT останется резервным."
     fi

@@ -168,16 +168,22 @@ namespace
     }
 }
 
-/// Регистрирует raw keyboard input для получения PTT даже у свёрнутого окна.
+/// Регистрирует raw keyboard/mouse input для PTT даже у свёрнутого окна.
 bool FakeDiscordApp::RegisterGlobalPttInput()
 {
-    RAWINPUTDEVICE device{};
-    device.usUsagePage = 0x01; // Generic Desktop Controls.
-    device.usUsage = 0x06;     // Keyboard.
-    device.dwFlags = RIDEV_INPUTSINK;
-    device.hwndTarget = state_.window;
+    RAWINPUTDEVICE devices[2]{};
 
-    return RegisterRawInputDevices(&device, 1, sizeof(device)) == TRUE;
+    devices[0].usUsagePage = 0x01; // Generic Desktop Controls.
+    devices[0].usUsage = 0x06;     // Keyboard.
+    devices[0].dwFlags = RIDEV_INPUTSINK;
+    devices[0].hwndTarget = state_.window;
+
+    devices[1].usUsagePage = 0x01; // Generic Desktop Controls.
+    devices[1].usUsage = 0x02;     // Mouse.
+    devices[1].dwFlags = RIDEV_INPUTSINK;
+    devices[1].hwndTarget = state_.window;
+
+    return RegisterRawInputDevices(devices, 2, sizeof(devices[0])) == TRUE;
 }
 
 /// Применяет состояние PTT независимо от того, находится ли FakeDiscord в фокусе.
@@ -206,7 +212,7 @@ bool FakeDiscordApp::HandlePttKeyState(WPARAM virtualKey, bool pressed)
     return true;
 }
 
-/// Принимает системный raw keyboard input, включая события при свёрнутом окне.
+/// Принимает системный raw keyboard/mouse input, включая события при свёрнутом окне.
 bool FakeDiscordApp::HandleRawInput(LPARAM rawInputHandle)
 {
     UINT size = 0;
@@ -233,15 +239,34 @@ bool FakeDiscordApp::HandleRawInput(LPARAM rawInputHandle)
     }
 
     const RAWINPUT* input = reinterpret_cast<const RAWINPUT*>(buffer.data());
-    if (input->header.dwType != RIM_TYPEKEYBOARD)
-        return false;
+    if (input->header.dwType == RIM_TYPEKEYBOARD)
+    {
+        const RAWKEYBOARD& keyboard = input->data.keyboard;
+        if (keyboard.VKey == 0 || keyboard.VKey == 255)
+            return false;
 
-    const RAWKEYBOARD& keyboard = input->data.keyboard;
-    if (keyboard.VKey == 0 || keyboard.VKey == 255)
-        return false;
+        const bool pressed = (keyboard.Flags & RI_KEY_BREAK) == 0;
+        return HandlePttKeyState(static_cast<WPARAM>(keyboard.VKey), pressed);
+    }
 
-    const bool pressed = (keyboard.Flags & RI_KEY_BREAK) == 0;
-    return HandlePttKeyState(static_cast<WPARAM>(keyboard.VKey), pressed);
+    if (input->header.dwType == RIM_TYPEMOUSE)
+    {
+        const USHORT flags = input->data.mouse.usButtonFlags;
+        bool handled = false;
+
+        if ((flags & RI_MOUSE_BUTTON_4_DOWN) != 0)
+            handled = HandlePttKeyState(VK_XBUTTON1, true) || handled;
+        if ((flags & RI_MOUSE_BUTTON_4_UP) != 0)
+            handled = HandlePttKeyState(VK_XBUTTON1, false) || handled;
+        if ((flags & RI_MOUSE_BUTTON_5_DOWN) != 0)
+            handled = HandlePttKeyState(VK_XBUTTON2, true) || handled;
+        if ((flags & RI_MOUSE_BUTTON_5_UP) != 0)
+            handled = HandlePttKeyState(VK_XBUTTON2, false) || handled;
+
+        return handled;
+    }
+
+    return false;
 }
 
 /// Проверяет совпадение Win32 virtual-key с сохранённой PTT-клавишей.
